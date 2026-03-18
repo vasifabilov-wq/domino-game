@@ -713,11 +713,14 @@ body:has(#view-game.active) {
   .sp-last { display: none; }
   .sp-turn { display: none; }
 
-  /* Table layout */
+  /* Table layout — single column: side opponent cols removed in portrait */
   .table-wrap {
     flex: 1;
-    grid-template-columns: 46px 1fr 46px;   /* was 58px — saves 24px of board width */
-    /* opp: auto | board: fills space | hand: auto at bottom */
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "top"
+      "board"
+      "hand";
     grid-template-rows: auto 1fr auto;
     gap: 6px;
     padding: 8px;
@@ -725,10 +728,18 @@ body:has(#view-game.active) {
     overflow: hidden;
   }
 
-  /* Opponent face-down tiles — sized for 46px column */
-  .opp-tile-back { width: 26px; height: 13px; }
-  .opp-left  .opp-tile-back,
-  .opp-right .opp-tile-back { width: 13px; height: 26px; }
+  /* Hide side opponents — all opponents rendered in opp-top row on phone */
+  .opp-left, .opp-right { display: none !important; }
+
+  /* opp-top: horizontal row of mini opponent cards */
+  .opp-top {
+    flex-direction: row;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 3px 0;
+  }
+
 
   /* ── Mobile board: snake layout, auto-scaled to fit board area ── */
   /* Restores full-board view so all played tiles are always visible */
@@ -742,9 +753,9 @@ body:has(#view-game.active) {
   }
   .board-chain-wrap::-webkit-scrollbar { display: none; }
 
-  /* Board tiles — smaller on phone so more fit per row */
-  .board-chain .tile.h { width: 44px; height: 22px; }
-  .board-chain .tile.v { width: 22px; height: 44px; }
+  /* Board tiles — slightly bigger now that full board width is available */
+  .board-chain .tile.h { width: 48px; height: 24px; }
+  .board-chain .tile.v { width: 24px; height: 48px; }
   .board-chain .tile .pip { width: 4px; height: 4px; }
   .drop-zone { min-width: 32px; height: 40px; }
 
@@ -818,15 +829,26 @@ body:has(#view-game.active) {
 }
 .rotate-dismiss:hover { color: #e2e8f0; }
 
-/* Rotate hint: portrait snake layout now works well — hint no longer needed.
-   Keep the element in DOM (landscape rule still hides it) but don't show in portrait. */
-/* @media (max-width: 900px) and (orientation: portrait) {
-  body:has(#view-game.active) .rotate-hint:not(.dismissed) { display: flex; }
-} */
-/* Always hide in landscape (user rotated → hint no longer needed) */
-@media (orientation: landscape) {
-  .rotate-hint { display: none !important; }
+/* Rotate hint: always hidden — portrait layout works great now */
+.rotate-hint { display: none !important; }
+
+/* ── Opponent mini-card (portrait phone: all opps in top row) ─────────────── */
+.opp-mini-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  background: rgba(0,0,0,.22);
+  border-radius: 6px;
+  border: 1px solid transparent;
 }
+.opp-mini-card.current-turn {
+  background: rgba(251,191,36,.1);
+  border-color: rgba(251,191,36,.35);
+}
+.opp-mini-card.current-turn .opp-name { color: #fde68a; }
+
 
 /* ── Landscape phone ─────────────────────────────────────────────────────── */
 @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {

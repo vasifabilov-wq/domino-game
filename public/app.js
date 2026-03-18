@@ -489,10 +489,10 @@ function calcTilesPerRow() {
     // IMPORTANT: don't rely on wrap.clientWidth here — the grid may not have
     // reflowed yet when renderBoard is first called, returning a stale/wrong value.
     // Instead, derive board width directly from window.innerWidth using known CSS:
-    //   game-root padding: 6px×2=12  table padding: 8px×2=16  col gaps: 6px×2=12
-    //   opp columns: 46px×2=92  →  total overhead = 132px
-    const boardW = Math.max(80, w - 132);
-    return Math.max(3, Math.floor(boardW / 50));
+    //   game-root padding: 6px×2=12  table padding: 8px×2=16  → total ~28px
+    //   No side opponent columns in portrait → full width available
+    const boardW = Math.max(80, w - 28);
+    return Math.max(3, Math.floor(boardW / 54));
   }
   // Desktop/tablet: DOM measurement is safe (layout is stable by this point)
   const wrap = document.getElementById('board-chain')?.parentElement;
@@ -607,7 +607,6 @@ function renderPlayers(gs) {
   const me = gs.mySeat;
   const pc = gs.players.length;
   // Map seats to visual positions relative to me
-  // Positions: top, left, right (up to 3 opponents for 4-player)
   const positions = [];
   for (let i = 1; i < pc; i++) {
     const seat = (me + i) % pc;
@@ -617,28 +616,73 @@ function renderPlayers(gs) {
     else if (i === 3)             positions.push({ pos: 'right', seat });
   }
 
-  // Clear all
-  ['top','left','right'].forEach(pos => {
-    document.getElementById('opp-' + pos + '-name').textContent = '';
-    document.getElementById('opp-' + pos + '-tiles').innerHTML  = '';
-    document.getElementById('opp-' + pos).classList.remove('current-turn');
-  });
+  const topArea = document.getElementById('opp-top');
 
-  positions.forEach(({ pos, seat }) => {
-    const p = gs.players.find(p => p.seat === seat);
-    if (!p) return;
-    const nameEl  = document.getElementById('opp-' + pos + '-name');
-    const tilesEl = document.getElementById('opp-' + pos + '-tiles');
-    const area    = document.getElementById('opp-' + pos);
-    const isVert  = (pos === 'left' || pos === 'right');
+  if (isPhone()) {
+    // Portrait phone: collapse all opponents into opp-top as horizontal mini-cards.
+    // Side columns are hidden by CSS; top row shows everyone.
+    ['left','right'].forEach(pos => {
+      const n = document.getElementById('opp-' + pos + '-name');
+      const t = document.getElementById('opp-' + pos + '-tiles');
+      if (n) n.textContent = '';
+      if (t) t.innerHTML  = '';
+      document.getElementById('opp-' + pos)?.classList.remove('current-turn');
+    });
 
-    nameEl.textContent = p.name + (p.isCurrentTurn ? ' 🎲' : '') + ` (${p.tileCount})`;
-    if (p.isCurrentTurn) area.classList.add('current-turn');
+    topArea.innerHTML = '';  // rebuild mini-cards fresh each render
+    positions.forEach(({ seat }) => {
+      const p = gs.players.find(p => p.seat === seat);
+      if (!p) return;
+      const card = document.createElement('div');
+      card.className = 'opp-mini-card' + (p.isCurrentTurn ? ' current-turn' : '');
 
-    tilesEl.innerHTML = '';
-    const show = Math.min(p.tileCount, 7);
-    for (let i = 0; i < show; i++) tilesEl.appendChild(makeFaceDown(isVert));
-  });
+      const nameEl = document.createElement('div');
+      nameEl.className = 'opp-name';
+      nameEl.textContent = (p.isCurrentTurn ? '🎲 ' : '') + p.name + ` (${p.tileCount})`;
+
+      const tilesEl = document.createElement('div');
+      tilesEl.className = 'opp-tiles';
+      const show = Math.min(p.tileCount, 5);
+      for (let i = 0; i < show; i++) tilesEl.appendChild(makeFaceDown(false));
+
+      card.appendChild(nameEl);
+      card.appendChild(tilesEl);
+      topArea.appendChild(card);
+    });
+
+  } else {
+    // Desktop / tablet / landscape phone: standard fixed-position layout.
+    // Restore opp-top structure if it was previously replaced by mini-cards.
+    if (!document.getElementById('opp-top-name')) {
+      topArea.innerHTML =
+        '<div class="opp-name" id="opp-top-name"></div>' +
+        '<div class="opp-tiles" id="opp-top-tiles"></div>';
+    }
+    ['top','left','right'].forEach(pos => {
+      const n = document.getElementById('opp-' + pos + '-name');
+      const t = document.getElementById('opp-' + pos + '-tiles');
+      if (n) n.textContent = '';
+      if (t) t.innerHTML  = '';
+      document.getElementById('opp-' + pos)?.classList.remove('current-turn');
+    });
+
+    positions.forEach(({ pos, seat }) => {
+      const p = gs.players.find(p => p.seat === seat);
+      if (!p) return;
+      const nameEl  = document.getElementById('opp-' + pos + '-name');
+      const tilesEl = document.getElementById('opp-' + pos + '-tiles');
+      const area    = document.getElementById('opp-' + pos);
+      const isVert  = (pos === 'left' || pos === 'right');
+
+      if (nameEl) nameEl.textContent = p.name + (p.isCurrentTurn ? ' 🎲' : '') + ` (${p.tileCount})`;
+      if (p.isCurrentTurn && area) area.classList.add('current-turn');
+      if (tilesEl) {
+        tilesEl.innerHTML = '';
+        const show = Math.min(p.tileCount, 7);
+        for (let i = 0; i < show; i++) tilesEl.appendChild(makeFaceDown(isVert));
+      }
+    });
+  }
 
   // Turn indicator in score panel
   const curP = gs.players.find(p => p.isCurrentTurn);
