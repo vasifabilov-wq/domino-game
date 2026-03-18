@@ -716,7 +716,7 @@ body:has(#view-game.active) {
   /* Table layout */
   .table-wrap {
     flex: 1;
-    grid-template-columns: 58px 1fr 58px;
+    grid-template-columns: 46px 1fr 46px;   /* was 58px — saves 24px of board width */
     /* opp: auto | board: fills space | hand: auto at bottom */
     grid-template-rows: auto 1fr auto;
     gap: 6px;
@@ -725,10 +725,10 @@ body:has(#view-game.active) {
     overflow: hidden;
   }
 
-  /* Bigger opponent face-down tiles */
-  .opp-tile-back { width: 32px; height: 16px; }
+  /* Opponent face-down tiles — sized for 46px column */
+  .opp-tile-back { width: 26px; height: 13px; }
   .opp-left  .opp-tile-back,
-  .opp-right .opp-tile-back { width: 16px; height: 32px; }
+  .opp-right .opp-tile-back { width: 13px; height: 26px; }
 
   /* ── Mobile board: snake layout, auto-scaled to fit board area ── */
   /* Restores full-board view so all played tiles are always visible */
@@ -747,6 +747,10 @@ body:has(#view-game.active) {
   .board-chain .tile.v { width: 22px; height: 44px; }
   .board-chain .tile .pip { width: 4px; height: 4px; }
   .drop-zone { min-width: 32px; height: 40px; }
+
+  /* Board chain: anchor to top of board area (below the open-ends badge),
+     grow downward as tiles are added — not float in vertical center */
+  .board-chain { margin-top: 36px; margin-bottom: auto; }
 
   /* Hide phone nav buttons (no longer needed without horizontal scroll) */
   .bnb { display: none !important; }
@@ -814,12 +818,11 @@ body:has(#view-game.active) {
 }
 .rotate-dismiss:hover { color: #e2e8f0; }
 
-/* Show hint ONLY: portrait + phone + game view active, not dismissed */
-@media (max-width: 900px) and (orientation: portrait) {
-  body:has(#view-game.active) .rotate-hint:not(.dismissed) {
-    display: flex;
-  }
-}
+/* Rotate hint: portrait snake layout now works well — hint no longer needed.
+   Keep the element in DOM (landscape rule still hides it) but don't show in portrait. */
+/* @media (max-width: 900px) and (orientation: portrait) {
+  body:has(#view-game.active) .rotate-hint:not(.dismissed) { display: flex; }
+} */
 /* Always hide in landscape (user rotated → hint no longer needed) */
 @media (orientation: landscape) {
   .rotate-hint { display: none !important; }

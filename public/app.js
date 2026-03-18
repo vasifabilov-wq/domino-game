@@ -484,14 +484,20 @@ function updateBoardEnds(board) {
 
 // ── How many tile-slots fit in one board row ────────────────────────────────────
 function calcTilesPerRow() {
-  const wrap = document.getElementById('board-chain')?.parentElement;
-  if (!wrap) return 8;
-  // Slot sizes match CSS tile widths + gap:
-  //   phone   ≤640px  → 44px tile → 50px slot
-  //   tablet  641–1100px → 52px tile → 58px slot
-  //   desktop >1100px → 62px tile → 67px slot
   const w = window.innerWidth;
-  const TILE_SLOT = isPhone() ? 50 : w <= 1100 ? 58 : 67;
+  if (isPhone()) {
+    // IMPORTANT: don't rely on wrap.clientWidth here — the grid may not have
+    // reflowed yet when renderBoard is first called, returning a stale/wrong value.
+    // Instead, derive board width directly from window.innerWidth using known CSS:
+    //   game-root padding: 6px×2=12  table padding: 8px×2=16  col gaps: 6px×2=12
+    //   opp columns: 46px×2=92  →  total overhead = 132px
+    const boardW = Math.max(80, w - 132);
+    return Math.max(3, Math.floor(boardW / 50));
+  }
+  // Desktop/tablet: DOM measurement is safe (layout is stable by this point)
+  const wrap = document.getElementById('board-chain')?.parentElement;
+  if (!wrap || !wrap.clientWidth) return 8;
+  const TILE_SLOT = w <= 1100 ? 58 : 67;
   return Math.max(3, Math.floor((wrap.clientWidth - 12) / TILE_SLOT));
 }
 
@@ -530,11 +536,11 @@ function autoScaleBoard() {
   const chain = document.getElementById('board-chain');
   if (!wrap || !chain) return;
 
-  // Reset first so we can measure the natural size
-  chain.style.transform        = '';
-  chain.style.transformOrigin  = '';
-  chain.style.marginTop        = 'auto';
-  chain.style.marginBottom     = 'auto';
+  // Reset transform only; remove any stale inline margins so CSS rules apply
+  chain.style.transform       = '';
+  chain.style.transformOrigin = '';
+  chain.style.marginTop       = '';  // let CSS margin-top: 36px (phone) or auto (desktop) take effect
+  chain.style.marginBottom    = '';
 
   requestAnimationFrame(() => {
     const ww = wrap.clientWidth  - 8;
@@ -544,9 +550,9 @@ function autoScaleBoard() {
     if (cw <= ww && ch <= wh) return; // already fits — nothing to do
 
     const scale = Math.max(Math.min(ww / cw, wh / ch, 1), 0.45);
-    chain.style.transformOrigin = 'center center';
+    // Phone: scale from top so tiles stay anchored at top of board (not float center)
+    chain.style.transformOrigin = isPhone() ? 'center top' : 'center center';
     chain.style.transform       = `scale(${scale})`;
-    // Keep auto margins so the scaled chain stays centred
   });
 }
 
