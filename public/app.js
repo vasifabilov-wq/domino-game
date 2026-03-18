@@ -421,12 +421,19 @@ function renderBoard(gs) {
   const selSides   = (S.selectedTileIdx !== null && gs.isMyTurn) ? S.selectedTileSides : [];
 
   // ── Phase 1: Build ordered element array ────────────────────────────────────
+  // perRow must be computed here so we can detect RTL rows during tile rendering.
+  const perRow = calcTilesPerRow();
   const elements = [];
 
   bd.tiles.forEach(({ tile, flipped }, idx) => {
     const [a, b] = tile;
-    const showA = flipped ? b : a;
-    const showB = flipped ? a : b;
+    // In RTL rows (odd rowIdx) flex-direction:row-reverse mirrors the visual left/right
+    // of every tile element.  The engine sets `flipped` for LTR (connecting pip on DOM-left).
+    // Invert the flip for RTL rows so the connecting pip still faces the chain interior.
+    const rowIdx        = Math.floor(idx / perRow);
+    const effectiveFlip = (rowIdx % 2 === 1) ? !flipped : flipped;
+    const showA = effectiveFlip ? b : a;
+    const showB = effectiveFlip ? a : b;
 
     if (idx === spinnerIdx) {
       const wrap = document.createElement('div');
@@ -483,7 +490,6 @@ function renderBoard(gs) {
   // matching real domino where the turning tile signals the snake bend.
   // LTR row: corner tile ends at the RIGHT edge.
   // RTL row (row-reverse): corner tile is DOM-last → appears at LEFT visual edge.
-  const perRow = calcTilesPerRow();
   let rowIdx = 0;
   for (let i = 0; i < elements.length; i += perRow, rowIdx++) {
     const isLast = (i + perRow >= elements.length);
