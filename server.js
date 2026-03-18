@@ -273,6 +273,22 @@ function doDrawTile(room, seat) {
   }
 }
 
+// ── Draw exactly ONE tile (human players — client handles loop via overlay) ───
+function doDrawOneTile(room, seat) {
+  const gs = room.gs;
+  if (gs.status !== 'playing' || gs.currentSeat !== seat) return;
+  if (gs.graveyard.length === 0) { doPassTurn(room, seat); return; }
+
+  const tile = gs.graveyard.pop();
+  gs.hands[seat].push(tile);
+  gs.lastPlayedTile = null;
+  gs.lastScore = 0;
+  gs.turnStartTime = Date.now();
+  setTimer(room);
+  broadcast(room);
+  // No auto-pass here — client graveyard overlay handles "draw more or play"
+}
+
 // ── Pass turn ─────────────────────────────────────────────────────────────────
 function doPassTurn(room, seat) {
   const gs = room.gs;
@@ -524,7 +540,7 @@ io.on('connection', socket => {
   // ── CREATE ROOM ──────────────────────────────────────────────────────────────
   socket.on('create-room', ({ gameType, playerCount, playMode, hostName, rules }) => {
     const code = genCode();
-    const defaultRules = { spinner: true, armsBoth: true, autoDrawLoop: true, redeal: true, bomb: true, timerSecs: 60, targetScore: gameType === '101' ? 101 : 365 };
+    const defaultRules = { spinner: true, armsBoth: true, autoDrawLoop: true, redeal: true, bomb: true, timerSecs: 60, targetScore: gameType === '101' ? 101 : 365, optionalDraw: false };
     const merged = rules ? { ...defaultRules, ...rules } : { ...defaultRules };
     // 101 (Kozel) has no in-play scoring — spinner, armsBoth, bomb never apply
     if (gameType === '101') {
@@ -683,10 +699,18 @@ io.on('connection', socket => {
   });
 
   // ── DRAW TILE ────────────────────────────────────────────────────────────────
+  // Human players always draw one tile at a time; bots use the loop via autoPlay.
   socket.on('draw-tile', () => {
     const room = rooms.get(socket.data.roomCode);
     if (!room) return;
-    doDrawTile(room, socket.data.seat);
+    const gs = room.gs;
+    if (!gs) return;
+    // Guard: block draw if player has valid moves AND optionalDraw rule is off
+    if (!room.rules?.optionalDraw) {
+      const moves = G.getValidMoves(gs.hands[socket.data.seat], gs.board, gs.mustTile, room.rules);
+      if (moves.length > 0) return;
+    }
+    doDrawOneTile(room, socket.data.seat);
   });
 
   // ── PASS TURN ────────────────────────────────────────────────────────────────

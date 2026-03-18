@@ -46,7 +46,7 @@ let S = {
   myId: null, myName: null, room: null, isHost: false,
   picks: {
     gameType: '5s', playerCount: 3, playMode: 'individual',
-    rules: { spinner: true, armsBoth: true, autoDrawLoop: true, redeal: true, bomb: true, timerSecs: 60, targetScore: 365 }
+    rules: { spinner: true, armsBoth: true, autoDrawLoop: true, redeal: true, bomb: true, timerSecs: 60, targetScore: 365, optionalDraw: false }
   },
   // game
   gs: null,           // last game-update payload
@@ -54,6 +54,7 @@ let S = {
   selectedTileSides: [],
   timerInterval: null,
   autoPassInterval: null,  // countdown timer for auto-pass when no moves + empty graveyard
+  graveyardOpen: false,    // graveyard draw overlay is visible
 };
 
 // ── Dot positions in 3×3 grid (0-indexed, row-major) ──────────────────────────
@@ -102,21 +103,41 @@ function isPhone() {
 // ── Try to lock orientation to landscape (Android Chrome only; iOS ignores) ───
 async function tryLandscape() {
   try {
-    if (document.documentElement.requestFullscreen) {
-      await document.documentElement.requestFullscreen().catch(() => {});
-    }
     if (screen.orientation?.lock) {
       await screen.orientation.lock('landscape').catch(() => {});
     }
-  } catch(e) { /* Graceful fail — rotate hint (CSS) handles iOS */ }
+  } catch(e) {}
 }
+
+// ── Fullscreen API ─────────────────────────────────────────────────────────────
+async function tryFullscreen() {
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen().catch(() => {});
+    }
+  } catch(e) {}
+}
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {});
+  } else {
+    tryFullscreen();
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const btn = document.getElementById('sp-fs-btn');
+  if (btn) btn.textContent = document.fullscreenElement ? '⊡ Exit FS' : '⛶ Fullscreen';
+});
 
 // ── Views ──────────────────────────────────────────────────────────────────────
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (name === 'game' && isPhone()) tryLandscape();
+  if (name === 'game') {
+    if (isPhone()) tryLandscape();
+    tryFullscreen();
+  }
 }
 
 // ── Lobby option selectors ─────────────────────────────────────────────────────
@@ -275,6 +296,7 @@ function renderLobby(room) {
     if (r.spinner)       chips.push('Spinner');
     if (r.armsBoth)      chips.push('ArmsBoth');
     if (r.autoDrawLoop)  chips.push('AutoDraw');
+    if (r.optionalDraw)  chips.push('OptDraw');
     if (r.redeal)        chips.push('Redeal');
     if (r.bomb)          chips.push('💣 Bomb');
     if (r.timerSecs > 0) chips.push(`${r.timerSecs}s Timer`);
@@ -623,6 +645,59 @@ function makeDropZone(side, arrow, label, extraClass = '') {
 // renderDropZones kept for compatibility but now a no-op (renderBoard handles all zones)
 function renderDropZones(gs) {}
 
+// ── Graveyard Overlay ─────────────────────────────────────────────────────────
+function openGraveyard(reason) {
+  if (S.graveyardOpen) return;
+  S.graveyardOpen = true;
+  const count    = S.gs?.graveyardCount ?? 0;
+  const countEl  = document.getElementById('gv-count');
+  const msgEl    = document.getElementById('gv-msg');
+  const tilesEl  = document.getElementById('gv-tiles');
+  const actionsEl = document.getElementById('gv-actions');
+  countEl.textContent = `${count} tile${count !== 1 ? 's' : ''}`;
+  msgEl.textContent   = reason === 'no_moves'
+    ? 'No match — pick a tile to draw'
+    : 'Pick a tile to add to your hand';
+  tilesEl.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const t = document.createElement('div');
+    t.className = 'gv-tile';
+    t.onclick = graveyardPickTile;
+    tilesEl.appendChild(t);
+  }
+  actionsEl.innerHTML = '';
+  if (reason === 'optional') {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost';
+    btn.textContent = '✕ Cancel';
+    btn.onclick = closeGraveyard;
+    actionsEl.appendChild(btn);
+  }
+  document.getElementById('graveyard-overlay').style.display = 'flex';
+}
+function closeGraveyard() {
+  S.graveyardOpen = false;
+  document.getElementById('graveyard-overlay').style.display = 'none';
+}
+function refreshGraveyardOverlay(count) {
+  document.getElementById('gv-count').textContent = `${count} tile${count !== 1 ? 's' : ''}`;
+  document.getElementById('gv-msg').textContent   = 'No match — pick another tile';
+  const tilesEl = document.getElementById('gv-tiles');
+  tilesEl.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const t = document.createElement('div');
+    t.className = 'gv-tile';
+    t.onclick = graveyardPickTile;
+    tilesEl.appendChild(t);
+  }
+}
+function graveyardPickTile() {
+  // Lock all tiles to prevent double-draw
+  document.querySelectorAll('.gv-tile').forEach(t => { t.onclick = null; t.classList.add('picking'); });
+  document.getElementById('gv-msg').textContent = '✋ Drawing…';
+  socket.emit('draw-tile');
+}
+
 // ── Score panel ────────────────────────────────────────────────────────────────
 function renderScorePanel(gs) {
   document.getElementById('sp-gametype').textContent = gs.gameType === '5s' ? '5s — All Fives' : '101 — Kozel';
@@ -776,14 +851,8 @@ function renderMyHand(gs) {
   // If no valid moves on your turn:
   if (gs.isMyTurn && moves.length === 0) {
     if (gs.graveyardCount > 0) {
-      // Graveyard available → auto-draw (server loops until playable tile or graveyard empty)
-      label.textContent = '⬆ Drawing from pile…';
-      setTimeout(() => {
-        // Guard: still our turn and still no moves when the timer fires
-        if (S.gs && S.gs.isMyTurn && (!S.gs.validMoves || S.gs.validMoves.length === 0)) {
-          socket.emit('draw-tile');
-        }
-      }, 600);
+      // Graveyard available → open overlay so player manually picks a tile
+      openGraveyard('required');
     } else {
       // Graveyard empty, no moves → countdown and auto-pass in 3 seconds
       actBtns.style.display = 'flex';
@@ -806,6 +875,15 @@ function renderMyHand(gs) {
         }
       }, 1000);
     }
+  }
+
+  // Optional draw: show graveyard button when player HAS valid moves but optionalDraw rule is on
+  if (gs.isMyTurn && moves.length > 0 && gs.rules?.optionalDraw && gs.graveyardCount > 0) {
+    actBtns.style.display = 'flex';
+    document.getElementById('btn-pass').style.display = 'none';
+    const drawBtn = document.getElementById('btn-draw');
+    drawBtn.style.display = 'inline-flex';
+    drawBtn.textContent = `🂠 Graveyard (${gs.graveyardCount})`;
   }
 
   // Show fallback side buttons when tile selected (board drop zones handled by renderBoard)
@@ -844,8 +922,80 @@ function playSide(side) {
   S.selectedTileIdx   = null;
   S.selectedTileSides = [];
 }
-function drawTile() { socket.emit('draw-tile'); }
+function drawTile() { openGraveyard('optional'); }
 function passTurn() { socket.emit('pass-turn'); }
+
+// ── Graveyard overlay ──────────────────────────────────────────────────────────
+// mode: 'required' (no valid moves, must draw) | 'optional' (has moves, choosing to draw)
+function openGraveyard(mode) {
+  if (S.graveyardOpen) return;
+  S.graveyardOpen = true;
+  const overlay = document.getElementById('graveyard-overlay');
+  if (!overlay) return;
+  overlay.dataset.mode = mode;
+  refreshGraveyardOverlay(S.gs, mode);
+  overlay.style.display = 'flex';
+}
+
+function closeGraveyard() {
+  S.graveyardOpen = false;
+  const overlay = document.getElementById('graveyard-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function refreshGraveyardOverlay(gs, mode) {
+  if (!gs) return;
+  const overlay = document.getElementById('graveyard-overlay');
+  if (!overlay) return;
+  const m = mode || overlay.dataset.mode || 'required';
+  const count = gs.graveyardCount || 0;
+
+  // Title & message
+  const title = overlay.querySelector('.gv-title');
+  if (title) title.textContent = m === 'optional' ? '🂠 Graveyard' : '🂠 No valid moves';
+
+  const msg = document.getElementById('gv-msg');
+  if (msg) msg.textContent = m === 'optional'
+    ? 'You have moves — or draw a tile instead'
+    : 'Pick any face-down tile to draw it';
+
+  const countBadge = document.getElementById('gv-count');
+  if (countBadge) countBadge.textContent = `${count} tile${count !== 1 ? 's' : ''}`;
+
+  // Build face-down tile grid
+  const tilesEl = document.getElementById('gv-tiles');
+  if (!tilesEl) return;
+  tilesEl.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'gv-tile';
+    card.title = 'Draw this tile';
+    card.onclick = () => graveyardPickTile();
+    tilesEl.appendChild(card);
+  }
+
+  // Action buttons
+  const actionsEl = document.getElementById('gv-actions');
+  if (actionsEl) {
+    actionsEl.innerHTML = '';
+    if (m === 'optional') {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-ghost';
+      cancelBtn.textContent = '✕ Cancel';
+      cancelBtn.onclick = closeGraveyard;
+      actionsEl.appendChild(cancelBtn);
+    }
+  }
+}
+
+function graveyardPickTile() {
+  if (!S.graveyardOpen) return;
+  // Disable all tiles immediately to prevent double-click
+  const overlay = document.getElementById('graveyard-overlay');
+  if (overlay) overlay.querySelectorAll('.gv-tile').forEach(t => { t.onclick = null; t.style.opacity = '0.4'; });
+  socket.emit('draw-tile');
+  // Overlay stays open; game-update will close or refresh it
+}
 
 // ── Timer ──────────────────────────────────────────────────────────────────────
 function renderTimer(gs) {
@@ -1074,6 +1224,14 @@ socket.on('game-update', (gs) => {
     if (me) S.myName = me.name;
   }
   S._autoReconnect = false;
+  // Update or close graveyard overlay on new game state
+  if (S.graveyardOpen) {
+    if (gs.isMyTurn && (!gs.validMoves || gs.validMoves.length === 0) && gs.graveyardCount > 0) {
+      refreshGraveyardOverlay(gs);  // still no moves → refresh with new graveyard count
+    } else {
+      closeGraveyard();             // got a playable tile or turn changed → close
+    }
+  }
   hideRoundOverlay();
   hideGameOverOverlay();
   showView('game');

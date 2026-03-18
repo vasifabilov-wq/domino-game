@@ -91,6 +91,7 @@
             <button class="rule-pill on" data-rule="autoDrawLoop" onclick="toggleRule(this)" title="Auto-draw until a playable tile is found (standard: draw one then pass)">AutoDraw</button>
             <button class="rule-pill on" data-rule="redeal"       onclick="toggleRule(this)" title="Allow redeal if hand has 5+ of one pip without that double">Redeal</button>
             <button class="rule-pill on" data-rule="bomb"         data-only="5s" onclick="toggleRule(this)" title="BOMB: scoring 35+ pts in one play ends the game instantly! [6,6]+[4,4]+[5,5]+5 = 35">💣 Bomb</button>
+            <button class="rule-pill"    data-rule="optionalDraw"                onclick="toggleRule(this)" title="Players may draw from graveyard even when they have valid moves (2–3 player games)">🂠 Optional Draw</button>
           </div>
           <!-- Timer -->
           <div class="rule-row">
@@ -204,6 +205,7 @@
           <span class="sp-room-lbl">ROOM</span>
           <span id="sp-room-code" class="sp-room-code" onclick="copyGameLink()"></span>
         </div>
+        <button class="sp-fs-btn" id="sp-fs-btn" onclick="toggleFullscreen()" title="Toggle fullscreen">⛶ Fullscreen</button>
       </div>
 
       <!-- Table -->
@@ -264,6 +266,21 @@
       </div><!-- end table-wrap -->
 
     </div><!-- end game-root -->
+
+    <!-- Graveyard overlay -->
+    <div id="graveyard-overlay" class="graveyard-overlay" style="display:none">
+      <div class="graveyard-card">
+        <div class="gv-header">
+          <div>
+            <div class="gv-title">🂠 Graveyard</div>
+            <div id="gv-msg" class="gv-msg">Pick a tile to draw</div>
+          </div>
+          <span id="gv-count" class="gv-count-badge">— tiles</span>
+        </div>
+        <div id="gv-tiles" class="gv-tiles"></div>
+        <div id="gv-actions" class="gv-actions"></div>
+      </div>
+    </div>
 
     <!-- Round result overlay -->
     <div id="round-overlay" class="round-overlay" style="display:none">
