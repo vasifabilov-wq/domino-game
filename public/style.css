@@ -316,13 +316,15 @@ body:has(#view-game.active) {
 /* Single-row board: centre tiles horizontally too */
 .board-chain.solo-row .chain-row { justify-content: center; }
 
-/* Each snake row */
+/* Each snake row — explicit width: 100% overrides mobile Safari's failure
+   to stretch flex children that are themselves flex containers */
 .chain-row {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 3px;
   flex-wrap: nowrap;
+  width: 100%;
 }
 /* RTL rows — reverse direction for snake effect */
 .chain-row.row-rtl { flex-direction: row-reverse; }
