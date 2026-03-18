@@ -479,6 +479,26 @@ body:has(#view-game.active) {
 .toast.ok  { border-color: var(--success); color: var(--success); }
 .toast.err { border-color: var(--danger);  color: var(--danger);  }
 
+/* ── Board nav buttons (◀/▶ phone scroll helpers) ────────────────────────── */
+/* Hidden by default; shown only inside phone media queries if ever re-enabled */
+.bnb {
+  display: none;
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  z-index: 5;
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  width: 32px; height: 32px;
+  font-size: .9rem; color: rgba(255,255,255,.7);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  padding: 0;
+  align-items: center; justify-content: center;
+}
+.bnb-left  { left:  4px; }
+.bnb-right { right: 4px; }
+
 /* ── Open-ends indicator (always-visible pip badge row) ──────────────────── */
 .board-ends {
   position: absolute;
@@ -643,8 +663,8 @@ body:has(#view-game.active) {
   .table-wrap {
     flex: 1;
     grid-template-columns: 58px 1fr 58px;
-    /* opp: auto | board: fixed 140px | hand: 1fr (fills rest, anchored bottom) */
-    grid-template-rows: auto 140px 1fr;
+    /* opp: auto | board: fills space | hand: auto at bottom */
+    grid-template-rows: auto 1fr auto;
     gap: 6px;
     padding: 8px;
     border-radius: 12px;
@@ -656,40 +676,26 @@ body:has(#view-game.active) {
   .opp-left  .opp-tile-back,
   .opp-right .opp-tile-back { width: 16px; height: 32px; }
 
-  /* ── Mobile board: horizontal scroll (single line, no snake wrap) ── */
-  /* This matches how real mobile domino apps (Domino!, Dominoes Gold) work */
+  /* ── Mobile board: snake layout, auto-scaled to fit board area ── */
+  /* Restores full-board view so all played tiles are always visible */
   .board-chain-wrap {
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-direction: row;
-    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex-direction: column;
+    align-items: stretch;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* hide scrollbar on mobile */
+    scrollbar-width: none;
   }
   .board-chain-wrap::-webkit-scrollbar { display: none; }
 
-  .board-chain {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-    width: max-content;
-    min-width: 100%;
-    margin: 0;
-    padding: 4px 12px;
-    gap: 3px;
-  }
-
-  /* Override snake RTL reversal — all tiles flow left-to-right on mobile */
-  .chain-row.row-rtl { flex-direction: row; }
-
-  /* Center tiles if board fits on screen without scrolling */
-  .board-chain.solo-row .chain-row { justify-content: flex-start; }
-
-  /* Board tiles — slightly smaller on phone */
-  .board-chain .tile.h { width: 56px; height: 28px; }
-  .board-chain .tile.v { width: 28px; height: 56px; }
+  /* Board tiles — smaller on phone so more fit per row */
+  .board-chain .tile.h { width: 44px; height: 22px; }
+  .board-chain .tile.v { width: 22px; height: 44px; }
   .board-chain .tile .pip { width: 4px; height: 4px; }
-  .drop-zone { min-width: 40px; height: 50px; }
+  .drop-zone { min-width: 32px; height: 40px; }
+
+  /* Hide phone nav buttons (no longer needed without horizontal scroll) */
+  .bnb { display: none !important; }
 
   /* Hand tiles — slightly smaller on phone */
   .tile.h { width: 78px; height: 39px; }
@@ -791,32 +797,22 @@ body:has(#view-game.active) {
     border-radius: 12px;
   }
 
-  /* Landscape board: also horizontal scroll (mirrors portrait fix) */
+  /* Landscape board: snake layout — same as portrait, auto-scaled */
   .board-chain-wrap {
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-direction: row;
-    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex-direction: column;
+    align-items: stretch;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
   .board-chain-wrap::-webkit-scrollbar { display: none; }
-  .board-chain {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: center;
-    width: max-content;
-    min-width: 100%;
-    margin: 0;
-    padding: 4px 12px;
-    gap: 3px;
-  }
-  .chain-row.row-rtl { flex-direction: row; }
 
   /* Landscape tiles — slightly bigger than portrait since more horizontal space */
   .board-chain .tile.h { width: 62px; height: 31px; }
   .board-chain .tile.v { width: 31px; height: 62px; }
   .board-chain .tile .pip { width: 5px; height: 5px; }
+  .bnb { display: none !important; }
 
   /* Hand tiles */
   .tile.h { width: 72px; height: 36px; }

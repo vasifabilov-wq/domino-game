@@ -484,12 +484,11 @@ function updateBoardEnds(board) {
 
 // ── How many tile-slots fit in one board row ────────────────────────────────────
 function calcTilesPerRow() {
-  // Phone (portrait OR landscape): single horizontal row — board scrolls sideways
-  if (isPhone()) return 9999;
   const wrap = document.getElementById('board-chain')?.parentElement;
   if (!wrap) return 8;
-  const TILE_SLOT = 67; // board tile width (62) + gap (3) + a little breathing room
-  return Math.max(4, Math.floor((wrap.clientWidth - 12) / TILE_SLOT));
+  // Phone tiles are 44px wide; desktop tiles are 62px — use correct slot size
+  const TILE_SLOT = isPhone() ? 50 : 67;
+  return Math.max(3, Math.floor((wrap.clientWidth - 12) / TILE_SLOT));
 }
 
 // ── Scroll board to show the active end ────────────────────────────────────────
@@ -498,21 +497,7 @@ function scrollToActive() {
   const chain = document.getElementById('board-chain');
   if (!wrap || !chain) return;
 
-  if (isPhone()) {
-    requestAnimationFrame(() => {
-      // Smart direction: if tile selected and ONLY left end is valid → scroll left
-      if (S.selectedTileIdx !== null && S.selectedTileSides.length > 0) {
-        const hasLeft  = S.selectedTileSides.includes('left');
-        const hasRight = S.selectedTileSides.includes('right');
-        if (hasLeft && !hasRight) { wrap.scrollLeft = 0; return; }
-      }
-      // Default: scroll to right (most recent tile / right drop zone)
-      wrap.scrollLeft = wrap.scrollWidth;
-    });
-    return;
-  }
-
-  // Desktop snake: vertical scroll to last row, then auto-scale
+  // All devices use snake: vertical scroll to last row, then auto-scale
   const rows = chain.querySelectorAll('.chain-row');
   if (rows.length <= 1) {
     requestAnimationFrame(() => { wrap.scrollTop = 0; autoScaleBoard(); });
@@ -535,9 +520,8 @@ function boardNavTo(side) {
   wrap.scrollTo({ left: side === 'left' ? 0 : wrap.scrollWidth, behavior: 'smooth' });
 }
 
-// ── Desktop: auto-scale board chain to fit the visible board area ─────────────
+// ── Auto-scale board chain to fit the visible board area (all devices) ────────
 function autoScaleBoard() {
-  if (isPhone()) return;
   const wrap  = document.getElementById('board-chain')?.parentElement;
   const chain = document.getElementById('board-chain');
   if (!wrap || !chain) return;
