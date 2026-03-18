@@ -808,7 +808,14 @@ function winnerName(gs, owner) {
   return p ? (p.seat === gs.mySeat ? 'You' : p.name) : 'Unknown';
 }
 
-function hideRoundOverlay() { document.getElementById('round-overlay').style.display = 'none'; }
+function hideRoundOverlay()   { document.getElementById('round-overlay').style.display   = 'none'; }
+function hideGameOverOverlay(){ document.getElementById('gameover-overlay').style.display = 'none'; }
+
+// ── Rematch: same players, same settings, fresh game ─────────────────────────
+function rematch() {
+  if (!S.room?.code) return;
+  socket.emit('rematch', { code: S.room.code });
+}
 
 // ── Game over overlay ──────────────────────────────────────────────────────────
 function showGameOver(gs) {
@@ -844,6 +851,33 @@ function showGameOver(gs) {
       });
     }
   }
+
+  // ── Series wins ledger ──────────────────────────────────────────────────────
+  const wins = gs.wins || {};
+  const winsEl = document.getElementById('go-wins');
+  const winsListEl = document.getElementById('go-wins-list');
+  const totalWins = Object.values(wins).reduce((a, b) => a + b, 0);
+  if (totalWins > 0) {
+    winsEl.style.display = 'block';
+    winsListEl.innerHTML = '';
+    if (gs.playMode === 'teams') {
+      ['A', 'B'].forEach(tm => {
+        const w = wins[tm] || 0;
+        const row = document.createElement('div'); row.className = 'ro-score-row';
+        row.innerHTML = `<span>Team ${tm}</span><span style="color:var(--team-${tm.toLowerCase()})">${w} win${w !== 1 ? 's' : ''}</span>`;
+        winsListEl.appendChild(row);
+      });
+    } else {
+      gs.players.forEach(p => {
+        const w = wins[String(p.seat)] || 0;
+        const row = document.createElement('div'); row.className = 'ro-score-row';
+        row.innerHTML = `<span>${p.seat === gs.mySeat ? 'You' : p.name}</span><span>${w} win${w !== 1 ? 's' : ''}</span>`;
+        winsListEl.appendChild(row);
+      });
+    }
+  } else {
+    winsEl.style.display = 'none';
+  }
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────────
@@ -875,6 +909,7 @@ socket.on('player-reconnected',  ({ playerName }) => toast(`${playerName} reconn
 
 socket.on('game-update', (gs) => {
   hideRoundOverlay();
+  hideGameOverOverlay();
   showView('game');
   renderGame(gs);
   if (gs.status === 'round_over') {

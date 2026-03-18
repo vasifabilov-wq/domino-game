@@ -174,7 +174,9 @@ body {
   display: flex;
   gap: 14px;
   height: 100vh;
+  height: 100dvh; /* iOS Safari — respects address bar */
   max-height: 100vh;
+  max-height: 100dvh;
   padding: 12px;
   overflow: hidden;
 }
@@ -236,7 +238,7 @@ body:has(#view-game.active) {
   grid-template-areas:
     ".    top   ."
     "left board right"
-    ".    hand  .";
+    "hand hand  hand"; /* hand spans full width — fixes landscape/tablet clipping */
   grid-template-rows: auto 1fr auto;
   grid-template-columns: 90px 1fr 90px;
   gap: 10px;
@@ -466,6 +468,11 @@ body:has(#view-game.active) {
 .ro-score-row.winner-row { background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.25); }
 .ro-next { font-size: .82rem; }
 
+/* ── Game Over wins ledger ────────────────────────────────────────────────── */
+.go-wins { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+.go-wins-label { font-size: .68rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+.go-action-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+
 /* ── Toast ────────────────────────────────────────────────────────────────── */
 .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(120px); background: var(--surface2); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 12px 24px; font-size: .88rem; font-weight: 500; pointer-events: none; transition: transform .3s cubic-bezier(.34,1.56,.64,1); z-index: 999; white-space: nowrap; max-width: 90vw; }
 .toast.show { transform: translateX(-50%) translateY(0); }
@@ -593,7 +600,8 @@ body:has(#view-game.active) {
   .table-wrap {
     flex: 1;
     grid-template-columns: 58px 1fr 58px;
-    grid-template-rows: 80px 1fr auto;
+    /* opp: auto | board: fixed 140px | hand: 1fr (fills rest, anchored bottom) */
+    grid-template-rows: auto 140px 1fr;
     gap: 6px;
     padding: 8px;
     border-radius: 12px;
@@ -649,7 +657,7 @@ body:has(#view-game.active) {
 
   .hand-wrap { gap: 6px; padding: 2px 0; }
   .my-label  { font-size: .68rem; }
-  .my-area   { gap: 6px; }
+  .my-area   { gap: 6px; align-self: end; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
 
   /* Touch-friendly action buttons */
   .btn-draw, .btn-pass { padding: 11px 22px; font-size: .9rem; }

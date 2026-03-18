@@ -45,6 +45,7 @@ function stateFor(room, seat) {
     gameType:  room.gameType,
     playMode:  room.playMode,
     rules:     room.rules,
+    wins:      room.wins || {},
     round:     gs.round,
     status:    gs.status,          // 'playing' | 'round_over' | 'game_over'
     board:     gs.board,
@@ -601,6 +602,24 @@ io.on('connection', socket => {
     room.status = 'playing';
     startRound(room);
     console.log(`[Room] Game started in ${code}`);
+  });
+
+  // ── REMATCH ──────────────────────────────────────────────────────────────────
+  socket.on('rematch', ({ code }) => {
+    const room = rooms.get(code);
+    if (!room || room.status !== 'game_over') return;
+    // Tally this game's winner before resetting
+    if (!room.wins) room.wins = {};
+    const winner = room.gs?.gameWinner;
+    if (winner !== undefined && winner !== null) {
+      const key = String(winner);
+      room.wins[key] = (room.wins[key] || 0) + 1;
+    }
+    // Reset for fresh game (room.gs = null → startRound initialises clean scores/round)
+    room.gs = null;
+    room.status = 'playing';
+    startRound(room);
+    console.log(`[Room] Rematch started in ${code}`);
   });
 
   // ── PLAY TILE ────────────────────────────────────────────────────────────────

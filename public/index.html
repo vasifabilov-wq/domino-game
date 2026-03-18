@@ -276,7 +276,15 @@
         <h2 id="go-title">Game Over!</h2>
         <p  id="go-sub"  class="ro-sub muted"></p>
         <div id="go-scores" class="ro-scores"></div>
-        <button class="btn btn-primary" onclick="location.reload()">Play Again</button>
+        <!-- Series wins ledger — hidden until 2nd+ game in the session -->
+        <div id="go-wins" class="go-wins" style="display:none">
+          <div class="go-wins-label">🏅 Series Record</div>
+          <div id="go-wins-list" class="ro-scores"></div>
+        </div>
+        <div class="go-action-btns">
+          <button class="btn btn-primary btn-full" onclick="rematch()">🔄 Play Again</button>
+          <button class="btn btn-ghost btn-full" onclick="location.reload()">✕ Quit &amp; New Game</button>
+        </div>
       </div>
     </div>
 
