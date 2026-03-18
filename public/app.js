@@ -446,9 +446,10 @@ function renderGame(gs) {
   _prevMyTurn = gs.isMyTurn;
 }
 
-// ── Board ──────────────────────────────────────────────────────────────────────
-// Snake layout: tiles are arranged in rows that alternate direction (LTR → RTL → LTR…)
-// like a real domino board. Rows wrap when they hit the edge, growing downward.
+// ── Board — path-based absolute layout ────────────────────────────────────────
+// Uses BoardLayout.compute() (boardLayout.js) to get deterministic {x,y,w,h}
+// for every tile, then positions them with position:absolute.
+// No flex rows, no wrapping glitches, no spinner arm overlap.
 function renderBoard(gs) {
   const chain    = document.getElementById('board-chain');
   const emptyMsg = document.getElementById('board-empty-msg');
@@ -456,143 +457,136 @@ function renderBoard(gs) {
 
   if (gs.board.isEmpty) {
     emptyMsg.style.display = 'block';
+    chain.removeAttribute('style');
     if (gs.isMyTurn && S.selectedTileIdx !== null) {
       emptyMsg.style.display = 'none';
-      const row = document.createElement('div');
-      row.className = 'chain-row row-ltr';
-      row.appendChild(makeDropZone('right', '▶', 'Play here', 'dz-center'));
-      chain.appendChild(row);
+      chain.style.cssText = 'position:relative;width:100%;height:100%;display:block';
+      const dz = makeDropZone('right', '▶', 'Play here', 'dz-center');
+      dz.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)';
+      chain.appendChild(dz);
     }
     scrollToActive();
     return;
   }
   emptyMsg.style.display = 'none';
 
-  const bd         = gs.board;
-  const spinnerIdx = bd.spinnerIdx ?? null;
-  const armsOpen   = spinnerIdx !== null
-    && spinnerIdx > 0
-    && spinnerIdx < bd.tiles.length - 1;
-  const selSides   = (S.selectedTileIdx !== null && gs.isMyTurn) ? S.selectedTileSides : [];
+  const bd       = gs.board;
+  const selSides = (S.selectedTileIdx !== null && gs.isMyTurn) ? S.selectedTileSides : [];
 
-  // ── Phase 1: Build ordered element array ────────────────────────────────────
-  // perRow must be computed here so we can detect RTL rows during tile rendering.
-  const perRow = calcTilesPerRow();
-  const elements = [];
+  // Measure available board width
+  const boardArea = document.getElementById('board-area');
+  const boardW    = boardArea ? Math.max(180, boardArea.clientWidth - 4) : 320;
 
-  bd.tiles.forEach(({ tile, flipped }, idx) => {
-    const [a, b] = tile;
-    // In RTL rows (odd rowIdx) flex-direction:row-reverse mirrors the visual left/right
-    // of every tile element.  The engine sets `flipped` for LTR (connecting pip on DOM-left).
-    // Invert the flip for RTL rows so the connecting pip still faces the chain interior.
-    const rowIdx        = Math.floor(idx / perRow);
-    const effectiveFlip = (rowIdx % 2 === 1) ? !flipped : flipped;
-    const showA = effectiveFlip ? b : a;
-    const showB = effectiveFlip ? a : b;
+  // Compute every tile's absolute position
+  const layout = BoardLayout.compute(bd, boardW, selSides);
 
-    if (idx === spinnerIdx) {
-      const wrap = document.createElement('div');
-      wrap.className = 'spinner-wrap';
+  // Size the container so the scroll/scale wrapper has exact content dimensions
+  chain.style.cssText = [
+    'position:relative',
+    `width:${layout.totalW}px`,
+    `height:${layout.totalH}px`,
+    'flex:none',
+    'margin:0',
+    'padding:0',
+    'display:block',
+  ].join(';');
 
-      const topArm = document.createElement('div');
-      topArm.className = 'arm-tiles arm-top';
-      if (armsOpen && selSides.includes('top')) topArm.appendChild(makeDropZone('top', '▲', ''));
-      [...(bd.topTiles || [])].reverse().forEach(({ tile: t, flipped: f }) => {
-        const ta = f ? t[1] : t[0], tb = f ? t[0] : t[1];
-        topArm.appendChild(makeTile(ta, tb, { vertical: ta !== tb }));
-      });
-      if (!armsOpen && spinnerIdx !== null) {
-        const lk = document.createElement('div');
-        lk.className = 'arm-locked'; lk.title = 'Extend both sides first';
-        topArm.appendChild(lk);
-      }
-      wrap.appendChild(topArm);
+  // Helper: place a DOM element at absolute coords
+  function place(el, slot) {
+    el.style.position = 'absolute';
+    el.style.left     = slot.x + 'px';
+    el.style.top      = slot.y + 'px';
+    if (slot.w) el.style.width  = slot.w + 'px';
+    if (slot.h) el.style.height = slot.h + 'px';
+  }
 
-      const spinEl = makeTile(showA, showB, { vertical: true });
-      spinEl.classList.add('spinner-tile');
-      wrap.appendChild(spinEl);
+  // Last-played tile for highlight (pip-value match on the last occurrence)
+  const lp = gs.lastPlayedTile;  // [a,b] or null
+  let lpMarked = false;
 
-      const botArm = document.createElement('div');
-      botArm.className = 'arm-tiles arm-bottom';
-      if (!armsOpen && spinnerIdx !== null) {
-        const lk = document.createElement('div');
-        lk.className = 'arm-locked'; lk.title = 'Extend both sides first';
-        botArm.appendChild(lk);
-      }
-      (bd.bottomTiles || []).forEach(({ tile: t, flipped: f }) => {
-        const ta = f ? t[1] : t[0], tb = f ? t[0] : t[1];
-        botArm.appendChild(makeTile(ta, tb, { vertical: ta !== tb }));
-      });
-      if (armsOpen && selSides.includes('bottom')) botArm.appendChild(makeDropZone('bottom', '▼', ''));
-      wrap.appendChild(botArm);
-
-      elements.push(wrap);
-    } else {
-      const isDouble = (a === b);
-      const el = makeTile(showA, showB, { vertical: isDouble });
-      elements.push(el);
+  // ── Render main chain ────────────────────────────────────────────────────────
+  layout.chain.forEach(slot => {
+    if (slot.isDZ) {
+      const dz = makeDropZone(slot.side,
+        slot.side === 'left' ? '◀' : '▶', '');
+      place(dz, slot);
+      chain.appendChild(dz);
+      return;
     }
+
+    const el = makeTile(slot.showA, slot.showB, { vertical: slot.isVertical });
+    place(el, slot);
+    if (slot.isCorner)  el.classList.add('corner-tile');
+    if (slot.isSpinner) el.classList.add('spinner-tile');
+
+    chain.appendChild(el);
   });
 
-  // Drop zones at logical chain ends
-  if (gs.isMyTurn && S.selectedTileIdx !== null) {
-    if (selSides.includes('left'))  elements.unshift(makeDropZone('left',  '◀', ''));
-    if (selSides.includes('right')) elements.push(makeDropZone('right', '▶', ''));
-  }
-
-  // ── Phase 2: Arrange into snake rows with corner tiles ──────────────────────
-  // For each complete (non-last) row the final tile is placed perpendicular —
-  // matching real domino where the turning tile signals the snake bend.
-  // LTR row: corner tile ends at the RIGHT edge.
-  // RTL row (row-reverse): corner tile is DOM-last → appears at LEFT visual edge.
-  let rowIdx = 0;
-  for (let i = 0; i < elements.length; i += perRow, rowIdx++) {
-    const isLast = (i + perRow >= elements.length);
-    const row = document.createElement('div');
-    row.className = 'chain-row ' + (rowIdx % 2 === 0 ? 'row-ltr' : 'row-rtl');
-    if (isLast) row.dataset.lastRow = '1';
-
-    // Corner tile: last element of each complete row, if it's a plain tile
-    if (!isLast) {
-      const cornerEl = elements[i + perRow - 1];
-      if (cornerEl?.classList.contains('tile')) {
-        if (cornerEl.classList.contains('h')) {
-          cornerEl.classList.remove('h');
-          cornerEl.classList.add('v');
-        }
-        cornerEl.classList.add('corner-tile');
-      }
-    }
-
-    elements.slice(i, i + perRow).forEach(el => row.appendChild(el));
-    chain.appendChild(row);
-  }
-  // Single-row board: CSS centres tiles horizontally via .solo-row
-  if (chain.children.length === 1) chain.classList.add('solo-row');
-
-  // Highlight the most recently played tile (subtle green glow)
-  if (gs.lastPlayedTile) {
-    const [la, lb] = gs.lastPlayedTile;
-    // Find last tile element in chain matching the value (most recently appended)
-    const allTileEls = Array.from(chain.querySelectorAll('.tile:not(.spinner-tile)'));
-    // Walk from end to find first matching tile by pip values
-    for (let i = allTileEls.length - 1; i >= 0; i--) {
-      const el = allTileEls[i];
-      const halves = el.querySelectorAll('.tile-half');
+  // ── Highlight last-played tile (walk backwards through chain items) ──────────
+  if (lp) {
+    const [la, lb] = lp;
+    const tileEls  = Array.from(chain.querySelectorAll('.tile'));
+    for (let i = tileEls.length - 1; i >= 0 && !lpMarked; i--) {
+      const halves = tileEls[i].querySelectorAll('.tile-half');
       if (halves.length === 2) {
         const pA = halves[0].querySelectorAll('.pip.on').length;
         const pB = halves[1].querySelectorAll('.pip.on').length;
         if ((pA === la && pB === lb) || (pA === lb && pB === la)) {
-          el.classList.add('last-played');
-          break;
+          tileEls[i].classList.add('last-played');
+          lpMarked = true;
         }
       }
     }
   }
 
-  // Update open-ends indicator
-  updateBoardEnds(gs.board);
+  // ── Render spinner arms ──────────────────────────────────────────────────────
+  if (layout.spinner) {
+    const { topLayouts, bottomLayouts, topDZ, botDZ } = layout.spinner;
+    const spinnerIdx  = bd.spinnerIdx ?? null;
+    const armsOpen    = spinnerIdx !== null
+      && spinnerIdx > 0
+      && spinnerIdx < bd.tiles.length - 1;
 
+    // Top arm tiles
+    topLayouts.forEach(slot => {
+      const el = makeTile(slot.showA, slot.showB, { vertical: false });
+      place(el, slot);
+      chain.appendChild(el);
+    });
+    // Top drop-zone
+    if (topDZ) {
+      const dz = makeDropZone('top', '▲', '');
+      place(dz, topDZ);
+      chain.appendChild(dz);
+    }
+    // Locked indicator when arms not yet open
+    if (!armsOpen && spinnerIdx !== null) {
+      const spSlot = layout.chain.find(c => !c.isDZ && c.isSpinner);
+      if (spSlot) {
+        const lk = document.createElement('div');
+        lk.className = 'arm-lock-badge';
+        lk.title = 'Extend both sides first';
+        lk.style.cssText = `position:absolute;left:${spSlot.x}px;top:${spSlot.y - 18}px;font-size:.55rem;color:rgba(255,255,255,.35);white-space:nowrap`;
+        lk.textContent = '🔒 arms locked';
+        chain.appendChild(lk);
+      }
+    }
+
+    // Bottom arm tiles
+    bottomLayouts.forEach(slot => {
+      const el = makeTile(slot.showA, slot.showB, { vertical: false });
+      place(el, slot);
+      chain.appendChild(el);
+    });
+    // Bottom drop-zone
+    if (botDZ) {
+      const dz = makeDropZone('bottom', '▼', '');
+      place(dz, botDZ);
+      chain.appendChild(dz);
+    }
+  }
+
+  updateBoardEnds(gs.board);
   scrollToActive();
 }
 
@@ -606,47 +600,55 @@ function updateBoardEnds(board) {
   document.getElementById('board-end-right').textContent = `${board.rightEnd ?? '–'} ▶`;
 }
 
-// ── How many tile-slots fit in one board row ────────────────────────────────────
+// ── calcTilesPerRow: kept as shim (no longer used by renderBoard) ──────────────
 function calcTilesPerRow() {
-  const w = window.innerWidth;
-  if (isPhone()) {
-    // IMPORTANT: don't rely on wrap.clientWidth here — the grid may not have
-    // reflowed yet when renderBoard is first called, returning a stale/wrong value.
-    // Instead, derive board width directly from window.innerWidth using known CSS:
-    //   game-root padding: 6px×2=12  table padding: 8px×2=16  → total ~28px
-    //   No side opponent columns in portrait → full width available
-    const boardW = Math.max(80, w - 28);
-    // Corner tile at row-end is vertical (half the h-tile width).
-    // Optimal packing: (perRow-1)×54 + 27 ≤ boardW → perRow ≤ (boardW+27)/54
-    return Math.max(3, Math.floor((boardW + 27) / 54));
-  }
-  // Desktop/tablet: DOM measurement is safe (layout is stable by this point)
-  const wrap = document.getElementById('board-chain')?.parentElement;
-  if (!wrap || !wrap.clientWidth) return 8;
-  const TILE_SLOT = w <= 1100 ? 58 : 67;
-  return Math.max(3, Math.floor((wrap.clientWidth - 12) / TILE_SLOT));
+  const boardArea = document.getElementById('board-area');
+  const boardW    = boardArea ? Math.max(180, boardArea.clientWidth - 4) : 320;
+  return Math.max(3, Math.floor((boardW - 16 + BoardLayout.GAP) / BoardLayout.SLOT));
 }
 
-// ── Scroll board to show the active end ────────────────────────────────────────
+// ── Scroll board to show the most recently placed tiles ───────────────────────
 function scrollToActive() {
   const wrap  = document.getElementById('board-chain')?.parentElement;
   const chain = document.getElementById('board-chain');
   if (!wrap || !chain) return;
 
-  // All devices use snake: vertical scroll to last row, then auto-scale
-  const rows = chain.querySelectorAll('.chain-row');
-  if (rows.length <= 1) {
-    requestAnimationFrame(() => { wrap.scrollTop = 0; autoScaleBoard(); });
-    return;
-  }
   requestAnimationFrame(() => {
-    const lastRow = chain.querySelector('[data-last-row="1"]');
-    if (lastRow) {
-      wrap.scrollTop = Math.max(0,
-        lastRow.offsetTop + lastRow.offsetHeight - wrap.clientHeight + 20);
-    }
     autoScaleBoard();
+    // After scaling, scroll so bottom of chain is visible (newest tiles are there)
+    const chainH = parseFloat(chain.style.height) || chain.scrollHeight;
+    const scale  = _chainScale(chain);
+    const scrollTarget = chainH * scale - wrap.clientHeight + 24;
+    if (scrollTarget > 0) wrap.scrollTop = scrollTarget;
   });
+}
+
+// ── Auto-scale board chain to fit the visible board area ─────────────────────
+function autoScaleBoard() {
+  const wrap  = document.getElementById('board-chain')?.parentElement;
+  const chain = document.getElementById('board-chain');
+  if (!wrap || !chain) return;
+
+  chain.style.transform       = '';
+  chain.style.transformOrigin = '';
+
+  requestAnimationFrame(() => {
+    const ww = wrap.clientWidth  - 8;
+    const wh = wrap.clientHeight - 8;
+    // Use explicit layout dimensions when available (absolute positioning)
+    const cw = parseFloat(chain.style.width)  || chain.scrollWidth;
+    const ch = parseFloat(chain.style.height) || chain.scrollHeight;
+    if (!cw || !ch || (cw <= ww && ch <= wh)) return;
+
+    const scale = Math.max(Math.min(ww / cw, wh / ch, 1), 0.38);
+    chain.style.transformOrigin = isPhone() ? 'center top' : 'center center';
+    chain.style.transform       = `scale(${scale})`;
+  });
+}
+
+function _chainScale(chain) {
+  const m = (chain.style.transform || '').match(/scale\(([^)]+)\)/);
+  return m ? parseFloat(m[1]) : 1;
 }
 
 // ── Phone: jump to either end of the chain ────────────────────────────────────
@@ -654,32 +656,6 @@ function boardNavTo(side) {
   const wrap = document.getElementById('board-chain')?.parentElement;
   if (!wrap) return;
   wrap.scrollTo({ left: side === 'left' ? 0 : wrap.scrollWidth, behavior: 'smooth' });
-}
-
-// ── Auto-scale board chain to fit the visible board area (all devices) ────────
-function autoScaleBoard() {
-  const wrap  = document.getElementById('board-chain')?.parentElement;
-  const chain = document.getElementById('board-chain');
-  if (!wrap || !chain) return;
-
-  // Reset transform only; remove any stale inline margins so CSS rules apply
-  chain.style.transform       = '';
-  chain.style.transformOrigin = '';
-  chain.style.marginTop       = '';  // let CSS margin-top: 36px (phone) or auto (desktop) take effect
-  chain.style.marginBottom    = '';
-
-  requestAnimationFrame(() => {
-    const ww = wrap.clientWidth  - 8;
-    const wh = wrap.clientHeight - 8;
-    const cw = chain.scrollWidth;
-    const ch = chain.scrollHeight;
-    if (cw <= ww && ch <= wh) return; // already fits — nothing to do
-
-    const scale = Math.max(Math.min(ww / cw, wh / ch, 1), 0.45);
-    // Phone: scale from top so tiles stay anchored at top of board (not float center)
-    chain.style.transformOrigin = isPhone() ? 'center top' : 'center center';
-    chain.style.transform       = `scale(${scale})`;
-  });
 }
 
 // Alias kept for any legacy calls

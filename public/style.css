@@ -1418,3 +1418,90 @@ body:has(#view-game.active) {
 @media (max-width: 640px) {
   .sp-head { gap: 6px; align-items: center; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ABSOLUTE-POSITION BOARD LAYOUT (boardLayout.js)
+   Replaces old flex chain-row system.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Board chain — now a position:relative container sized by JS */
+.board-chain {
+  /* Remove old flex-column layout */
+  display: block !important;
+  flex-direction: unset !important;
+  align-items: unset !important;
+  gap: unset !important;
+  padding: 0 !important;
+  /* JS sets width / height / position:relative inline */
+}
+
+/* All tiles on board use absolute positioning (set inline by renderBoard) */
+.board-chain .tile {
+  position: absolute;
+}
+
+/* Fixed tile size for board (layout engine uses TW=54, TH=27).
+   Override all breakpoint variants so engine coordinates match DOM geometry. */
+.board-chain .tile.h {
+  width:  54px !important;
+  height: 27px !important;
+}
+.board-chain .tile.v {
+  width:  27px !important;
+  height: 54px !important;
+}
+.board-chain .tile .tile-half { padding: 3px; gap: 1px; }
+.board-chain .tile .pip       { width: 4px; height: 4px; }
+
+/* Drop zones on board — also absolutely positioned by JS */
+.board-chain .drop-zone {
+  position: absolute;
+  /* Size overridden inline; keep animation */
+  min-width: unset;
+  height: unset;
+}
+
+/* Chain rows — kept for safety but no longer created by renderBoard */
+.chain-row { display: none !important; }
+
+/* Spinner wrap — replaced by direct absolute tiles; hide old wrapper */
+.spinner-wrap { display: none !important; }
+
+/* Board chain wrap: scroll container — same as before */
+.board-chain-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure board-chain-wrap fills board-area */
+.board-area {
+  overflow: hidden;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+/* Drop zone size (must match BoardLayout.DZ_W=42, DZ_H=38) */
+.board-chain .drop-zone {
+  width:  42px;
+  height: 38px;
+  min-width: 42px;
+  padding: 2px 4px;
+}
+.board-chain .drop-zone .dz-arrow { font-size: 1.1rem; }
+
+/* Phone overrides — tile size locked to engine values, no per-breakpoint change */
+@media (max-width: 640px) {
+  .board-chain .tile.h { width: 54px !important; height: 27px !important; }
+  .board-chain .tile.v { width: 27px !important; height: 54px !important; }
+  .board-chain { margin-top: 0 !important; }
+}
+@media (max-width: 900px) {
+  .board-chain .tile.h { width: 54px !important; height: 27px !important; }
+  .board-chain .tile.v { width: 27px !important; height: 54px !important; }
+}
+@media (max-width: 1100px) and (min-width: 641px) {
+  .board-chain .tile.h { width: 54px !important; height: 27px !important; }
+  .board-chain .tile.v { width: 27px !important; height: 54px !important; }
+}
