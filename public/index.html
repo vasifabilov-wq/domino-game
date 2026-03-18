@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Domino Game</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ── HOME ──────────────────────────────────────────────────── -->
+  <div id="view-home" class="view active">
+    <div class="home-wrap">
+      <div class="home-logo">
+        <div class="domino-icon">
+          <div class="domino-half">
+            <span class="dot"></span><span class="dot"></span>
+            <span class="dot"></span><span class="dot"></span>
+            <span class="dot"></span><span class="dot"></span>
+          </div>
+          <div class="domino-bar"></div>
+          <div class="domino-half">
+            <span class="dot"></span><span class="dot"></span>
+            <span class="dot"></span><span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+        <h1 class="game-title">DOMINO</h1>
+        <p class="game-sub">No signup. Just play.</p>
+      </div>
+      <div class="home-btns">
+        <button class="btn btn-primary btn-xl" onclick="showView('create')">＋ &nbsp;Create Game</button>
+        <button class="btn btn-ghost btn-xl" onclick="showView('join')">⤵ &nbsp;Join Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CREATE GAME ───────────────────────────────────────────── -->
+  <div id="view-create" class="view">
+    <div class="card-wrap">
+      <button class="back-btn" onclick="showView('home')">← Back</button>
+      <h2 class="card-title">Create Game</h2>
+      <div class="field">
+        <label class="field-label">Your Name</label>
+        <input id="create-name" type="text" class="input" placeholder="Enter your name" maxlength="20" />
+      </div>
+      <div class="field">
+        <label class="field-label">Game Type</label>
+        <div class="option-grid" id="sel-gametype">
+          <div class="opt-card selected" data-val="5s" onclick="pickOpt('gametype',this)">
+            <div class="opt-title">🟡 5s — All Fives</div>
+            <div class="opt-desc">Score multiples of 5 during play. First to 275 wins.</div>
+          </div>
+          <div class="opt-card" data-val="101" onclick="pickOpt('gametype',this)">
+            <div class="opt-title">🟤 101 — Kozel</div>
+            <div class="opt-desc">Round-based scoring with 13pt threshold. First to 101 wins.</div>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Number of Players</label>
+        <div class="pill-row" id="sel-players">
+          <button class="pill" data-val="2" onclick="pickPill('players',this)">2</button>
+          <button class="pill selected" data-val="3" onclick="pickPill('players',this)">3</button>
+          <button class="pill" data-val="4" onclick="pickPill('players',this)">4</button>
+        </div>
+      </div>
+      <div class="field" id="field-mode" style="display:none">
+        <label class="field-label">Play Mode</label>
+        <div class="option-grid" id="sel-mode">
+          <div class="opt-card selected" data-val="individual" onclick="pickOpt('mode',this)">
+            <div class="opt-title">👤 Individual</div>
+            <div class="opt-desc">Every player for themselves.</div>
+          </div>
+          <div class="opt-card" data-val="teams" onclick="pickOpt('mode',this)">
+            <div class="opt-title">👥 2 vs 2 Teams</div>
+            <div class="opt-desc">Two teams of two partners.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Custom Rules ─────────────────────────────────────────── -->
+      <div class="field">
+        <label class="field-label">Custom Rules <span class="muted" style="font-weight:400;text-transform:none;font-size:.7rem">· tap to toggle</span></label>
+        <div class="rules-section">
+          <!-- Toggle pills -->
+          <div class="rules-toggles">
+            <button class="rule-pill on" data-rule="spinner"      data-only="5s" onclick="toggleRule(this)" title="First double becomes 4-end spinner">Spinner</button>
+            <button class="rule-pill on" data-rule="armsBoth"     data-only="5s" onclick="toggleRule(this)" title="Arms open only after both sides of spinner extended (standard: immediate)">ArmsBoth</button>
+            <button class="rule-pill on" data-rule="autoDrawLoop" onclick="toggleRule(this)" title="Auto-draw until a playable tile is found (standard: draw one then pass)">AutoDraw</button>
+            <button class="rule-pill on" data-rule="redeal"       onclick="toggleRule(this)" title="Allow redeal if hand has 5+ of one pip without that double">Redeal</button>
+            <button class="rule-pill on" data-rule="bomb"         data-only="5s" onclick="toggleRule(this)" title="BOMB: scoring 35+ pts in one play ends the game instantly! [6,6]+[4,4]+[5,5]+5 = 35">💣 Bomb</button>
+          </div>
+          <!-- Timer -->
+          <div class="rule-row">
+            <span class="rule-row-lbl">Timer</span>
+            <button class="rule-val-pill"    data-group="timerSecs" data-val="0"  onclick="pickRuleVal(this)">Off</button>
+            <button class="rule-val-pill"    data-group="timerSecs" data-val="30" onclick="pickRuleVal(this)">30s</button>
+            <button class="rule-val-pill on" data-group="timerSecs" data-val="60" onclick="pickRuleVal(this)">60s</button>
+            <button class="rule-val-pill"    data-group="timerSecs" data-val="90" onclick="pickRuleVal(this)">90s</button>
+          </div>
+          <!-- Target score: default auto-fills from game type, fully customizable -->
+          <div class="rule-row">
+            <span class="rule-row-lbl">Target</span>
+            <input id="rule-target" type="number" class="rule-input" min="10" max="9999"
+                   value="365" inputmode="numeric" />
+            <button class="rule-reset-btn" onclick="resetTarget()" title="Reset to default for current game type">↺ Default</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-full" onclick="createGame()">Create Game →</button>
+      <p id="create-err" class="err-msg"></p>
+    </div>
+  </div>
+
+  <!-- ── JOIN GAME ─────────────────────────────────────────────── -->
+  <div id="view-join" class="view">
+    <div class="card-wrap">
+      <button class="back-btn" onclick="showView('home')">← Back</button>
+      <h2 class="card-title">Join Game</h2>
+      <div class="field">
+        <label class="field-label">Room Code</label>
+        <input id="join-code" type="text" class="input code-input" placeholder="ABC123" maxlength="6" oninput="this.value=this.value.toUpperCase()" />
+      </div>
+      <div class="field">
+        <label class="field-label">Your Name</label>
+        <input id="join-name" type="text" class="input" placeholder="Enter your name" maxlength="20" />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="joinGame()">Join Game →</button>
+      <p id="join-err" class="err-msg"></p>
+    </div>
+  </div>
+
+  <!-- ── LOBBY ─────────────────────────────────────────────────── -->
+  <div id="view-lobby" class="view">
+    <div class="lobby-wrap">
+      <div class="lobby-head">
+        <div>
+          <h2 id="lob-title">Game Lobby</h2>
+          <p id="lob-subtitle" class="muted"></p>
+        </div>
+        <div class="code-box">
+          <div class="code-lbl">ROOM CODE</div>
+          <div id="lob-code" class="code-val">——————</div>
+          <button id="copy-btn" class="copy-btn" onclick="copyLink()">Copy Link</button>
+        </div>
+      </div>
+      <div id="sec-individual">
+        <p class="sec-label">PLAYERS</p>
+        <div id="list-individual" class="player-list"></div>
+      </div>
+      <div id="sec-teams" style="display:none">
+        <div class="teams-grid">
+          <div>
+            <p class="sec-label team-a-lbl">TEAM A</p>
+            <div id="list-team-a" class="player-list"></div>
+          </div>
+          <div>
+            <p class="sec-label team-b-lbl">TEAM B</p>
+            <div id="list-team-b" class="player-list"></div>
+          </div>
+        </div>
+        <div id="sec-unassigned" style="display:none; margin-top:16px">
+          <p class="sec-label">UNASSIGNED</p>
+          <div id="list-unassigned" class="player-list"></div>
+        </div>
+      </div>
+      <div id="lob-rules" class="rules-chips-row"></div>
+      <div id="lob-status" class="status-bar"></div>
+      <div id="host-ctrl" style="display:none">
+        <button class="btn btn-success btn-full btn-xl" onclick="startGame()">▶ &nbsp;Start Game</button>
+        <p id="start-err" class="err-msg" style="text-align:center"></p>
+      </div>
+      <div id="guest-msg" class="guest-msg" style="display:none">⏳ Waiting for the host to start…</div>
+    </div>
+  </div>
+
+  <!-- ── GAME ──────────────────────────────────────────────────── -->
+  <div id="view-game" class="view">
+    <div class="game-root">
+
+      <!-- Score Panel -->
+      <div class="score-panel" id="score-panel">
+        <div class="sp-head">
+          <span id="sp-gametype" class="sp-tag"></span>
+          <span id="sp-round" class="sp-round">Round 1</span>
+        </div>
+        <div id="sp-scores" class="sp-scores"></div>
+        <div id="sp-pending" class="sp-pending" style="display:none">
+          <span class="sp-pending-lbl">Pending</span>
+          <span id="sp-pending-pts" class="sp-pending-pts"></span>
+        </div>
+        <div class="sp-divider"></div>
+        <div id="sp-turn" class="sp-turn"></div>
+        <div id="sp-timer" class="sp-timer">
+          <div class="timer-bar-wrap"><div id="timer-bar" class="timer-bar"></div></div>
+          <span id="timer-txt">1:00</span>
+        </div>
+        <div id="sp-last" class="sp-last" style="display:none"></div>
+        <div class="sp-divider"></div>
+        <div class="sp-room" title="Click to copy room link">
+          <span class="sp-room-lbl">ROOM</span>
+          <span id="sp-room-code" class="sp-room-code" onclick="copyGameLink()"></span>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap">
+
+        <!-- Top opponent -->
+        <div class="opp-area opp-top" id="opp-top">
+          <div class="opp-name" id="opp-top-name"></div>
+          <div class="opp-tiles" id="opp-top-tiles"></div>
+        </div>
+
+        <!-- Left opponent -->
+        <div class="opp-area opp-left" id="opp-left">
+          <div class="opp-name" id="opp-left-name"></div>
+          <div class="opp-tiles" id="opp-left-tiles"></div>
+        </div>
+
+        <!-- Board -->
+        <div class="board-area" id="board-area">
+          <div class="board-chain-wrap">
+            <div class="board-chain" id="board-chain"></div>
+          </div>
+          <div class="board-empty-msg" id="board-empty-msg">Waiting for first tile…</div>
+        </div>
+
+        <!-- Right opponent -->
+        <div class="opp-area opp-right" id="opp-right">
+          <div class="opp-name" id="opp-right-name"></div>
+          <div class="opp-tiles" id="opp-right-tiles"></div>
+        </div>
+
+        <!-- My hand + controls -->
+        <div class="my-area">
+          <div class="my-label" id="my-label">Your Hand</div>
+          <div class="hand-wrap" id="my-hand"></div>
+          <!-- Side selection -->
+          <div class="side-btns" id="side-btns" style="display:none">
+            <span class="side-hint">Place where?</span>
+            <button class="btn btn-side btn-left-end" onclick="playSide('left')">← Left End</button>
+            <button class="btn btn-side btn-cancel"   onclick="cancelSelect()">Cancel</button>
+            <button class="btn btn-side btn-right-end" onclick="playSide('right')">Right End →</button>
+          </div>
+          <!-- Draw / Pass buttons -->
+          <div class="action-btns" id="action-btns" style="display:none">
+            <button class="btn btn-draw" id="btn-draw" onclick="drawTile()">🂠 Draw Tile</button>
+            <button class="btn btn-pass" id="btn-pass" onclick="passTurn()">⏭ Pass Turn</button>
+          </div>
+        </div>
+
+      </div><!-- end table-wrap -->
+
+    </div><!-- end game-root -->
+
+    <!-- Round result overlay -->
+    <div id="round-overlay" class="round-overlay" style="display:none">
+      <div class="round-card">
+        <div id="ro-icon" class="ro-icon"></div>
+        <h2 id="ro-title"></h2>
+        <p  id="ro-sub" class="ro-sub muted"></p>
+        <div id="ro-hands" class="ro-hands"></div>
+        <div id="ro-scores" class="ro-scores"></div>
+        <p id="ro-next" class="ro-next muted">Next round starting…</p>
+      </div>
+    </div>
+
+    <!-- Game over overlay -->
+    <div id="gameover-overlay" class="round-overlay" style="display:none">
+      <div class="round-card">
+        <div class="ro-icon">🏆</div>
+        <h2 id="go-title">Game Over!</h2>
+        <p  id="go-sub"  class="ro-sub muted"></p>
+        <div id="go-scores" class="ro-scores"></div>
+        <button class="btn btn-primary" onclick="location.reload()">Play Again</button>
+      </div>
+    </div>
+
+  </div><!-- end view-game -->
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
