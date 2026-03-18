@@ -227,6 +227,14 @@
             <div class="board-chain" id="board-chain"></div>
           </div>
           <div class="board-empty-msg" id="board-empty-msg">Waiting for first tile…</div>
+          <!-- Always-visible open-ends indicator -->
+          <div id="board-ends" class="board-ends" style="display:none">
+            <span id="board-end-left"  class="board-end-badge">◀ –</span>
+            <span id="board-end-right" class="board-end-badge">– ▶</span>
+          </div>
+          <!-- Phone: jump to either end of the chain -->
+          <button class="bnb bnb-left"  onclick="boardNavTo('left')"  title="Left end">◀</button>
+          <button class="bnb bnb-right" onclick="boardNavTo('right')" title="Right end">▶</button>
         </div>
 
         <!-- Right opponent -->

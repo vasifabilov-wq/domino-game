@@ -479,6 +479,49 @@ body:has(#view-game.active) {
 .toast.ok  { border-color: var(--success); color: var(--success); }
 .toast.err { border-color: var(--danger);  color: var(--danger);  }
 
+/* ── Open-ends indicator (always-visible pip badge row) ──────────────────── */
+.board-ends {
+  position: absolute;
+  top: 6px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center;
+  pointer-events: none; z-index: 4;
+}
+.board-end-badge {
+  background: rgba(0,0,0,.5);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: .72rem; font-weight: 700;
+  color: rgba(255,255,255,.75);
+  letter-spacing: 1px;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+
+/* ── Phone board end-nav buttons ─────────────────────────────────────────── */
+.bnb {
+  display: none; /* shown only on phone */
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 5px;
+  color: rgba(255,255,255,.7);
+  width: 22px; height: 44px;
+  font-size: .8rem; cursor: pointer; z-index: 6;
+  align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.bnb:active { background: rgba(0,0,0,.75); }
+.bnb-left  { left:  2px; }
+.bnb-right { right: 2px; }
+@media (max-width: 640px) {
+  .bnb { display: flex; }
+}
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  .bnb { display: flex; }
+}
+
 /* ── Spinner Cross Layout ─────────────────────────────────────────────────── */
 /* The first double placed (spinner) renders as a vertical cross with arm tiles
    branching above and below. Each arm grows away from the spinner. */

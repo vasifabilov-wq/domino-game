@@ -466,7 +466,20 @@ function renderBoard(gs) {
   // Single-row board: CSS centres tiles horizontally via .solo-row
   if (chain.children.length === 1) chain.classList.add('solo-row');
 
+  // Update open-ends indicator
+  updateBoardEnds(gs.board);
+
   scrollToActive();
+}
+
+// ── Always-visible open-ends pip indicator ────────────────────────────────────
+function updateBoardEnds(board) {
+  const el = document.getElementById('board-ends');
+  if (!el) return;
+  if (!board || board.isEmpty) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  document.getElementById('board-end-left').textContent  = `◀ ${board.leftEnd  ?? '–'}`;
+  document.getElementById('board-end-right').textContent = `${board.rightEnd ?? '–'} ▶`;
 }
 
 // ── How many tile-slots fit in one board row ────────────────────────────────────
@@ -486,15 +499,23 @@ function scrollToActive() {
   if (!wrap || !chain) return;
 
   if (isPhone()) {
-    // Phone (portrait or landscape): horizontal scroll → jump to right end (latest tile)
-    requestAnimationFrame(() => { wrap.scrollLeft = wrap.scrollWidth; });
+    requestAnimationFrame(() => {
+      // Smart direction: if tile selected and ONLY left end is valid → scroll left
+      if (S.selectedTileIdx !== null && S.selectedTileSides.length > 0) {
+        const hasLeft  = S.selectedTileSides.includes('left');
+        const hasRight = S.selectedTileSides.includes('right');
+        if (hasLeft && !hasRight) { wrap.scrollLeft = 0; return; }
+      }
+      // Default: scroll to right (most recent tile / right drop zone)
+      wrap.scrollLeft = wrap.scrollWidth;
+    });
     return;
   }
 
-  // Desktop snake: vertical scroll to last row
+  // Desktop snake: vertical scroll to last row, then auto-scale
   const rows = chain.querySelectorAll('.chain-row');
   if (rows.length <= 1) {
-    requestAnimationFrame(() => { wrap.scrollTop = 0; });
+    requestAnimationFrame(() => { wrap.scrollTop = 0; autoScaleBoard(); });
     return;
   }
   requestAnimationFrame(() => {
@@ -503,6 +524,41 @@ function scrollToActive() {
       wrap.scrollTop = Math.max(0,
         lastRow.offsetTop + lastRow.offsetHeight - wrap.clientHeight + 20);
     }
+    autoScaleBoard();
+  });
+}
+
+// ── Phone: jump to either end of the chain ────────────────────────────────────
+function boardNavTo(side) {
+  const wrap = document.getElementById('board-chain')?.parentElement;
+  if (!wrap) return;
+  wrap.scrollTo({ left: side === 'left' ? 0 : wrap.scrollWidth, behavior: 'smooth' });
+}
+
+// ── Desktop: auto-scale board chain to fit the visible board area ─────────────
+function autoScaleBoard() {
+  if (isPhone()) return;
+  const wrap  = document.getElementById('board-chain')?.parentElement;
+  const chain = document.getElementById('board-chain');
+  if (!wrap || !chain) return;
+
+  // Reset first so we can measure the natural size
+  chain.style.transform        = '';
+  chain.style.transformOrigin  = '';
+  chain.style.marginTop        = 'auto';
+  chain.style.marginBottom     = 'auto';
+
+  requestAnimationFrame(() => {
+    const ww = wrap.clientWidth  - 8;
+    const wh = wrap.clientHeight - 8;
+    const cw = chain.scrollWidth;
+    const ch = chain.scrollHeight;
+    if (cw <= ww && ch <= wh) return; // already fits — nothing to do
+
+    const scale = Math.max(Math.min(ww / cw, wh / ch, 1), 0.45);
+    chain.style.transformOrigin = 'center center';
+    chain.style.transform       = `scale(${scale})`;
+    // Keep auto margins so the scaled chain stays centred
   });
 }
 
