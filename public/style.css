@@ -24,7 +24,7 @@
   --radius:       12px;
   --radius-sm:    8px;
 }
-html { font-size: 16px; }
+html { font-size: 16px; overscroll-behavior: none; }
 body {
   font-family: 'Inter', system-ui, sans-serif;
   background: var(--bg);
@@ -34,6 +34,7 @@ body {
   justify-content: center;
   align-items: flex-start;
   padding: 24px 16px 48px;
+  overscroll-behavior: none;
 }
 .muted { color: var(--muted); }
 
@@ -159,6 +160,7 @@ body {
 .badge-host { background: rgba(124,111,247,.2); color: #c4b5fd; }
 .badge-you  { background: rgba(16,185,129,.2);  color: var(--success); }
 .badge-dc   { background: rgba(248,113,113,.15); color: var(--danger); }
+.badge-bot  { background: rgba(251,191,36,.15);  color: #fde68a; }
 .team-btn { background: none; border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--muted); font-family: 'Inter', sans-serif; font-size: .72rem; font-weight: 600; padding: 3px 10px; cursor: pointer; transition: all .15s; }
 .team-btn:hover { border-color: var(--primary); color: var(--primary); }
 .team-btn-a:hover { border-color: var(--team-a); color: var(--team-a); }
@@ -633,6 +635,8 @@ body:has(#view-game.active) {
   border-radius: 2px;
   margin: 1px 0;
 }
+/* On the board, hide arm-locked indicator so spinner-wrap stays same height as a corner tile */
+.board-chain .arm-locked { display: none; }
 
 /* ── Drop Zones (visual placement targets on board ends) ──────────────────── */
 .drop-zone {

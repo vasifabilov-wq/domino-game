@@ -29,7 +29,8 @@ function lobbyRoom(room) {
     rules: room.rules,
     players: room.players.map(p => ({
       id: p.id, name: p.name, seat: p.seat,
-      team: p.team, isHost: p.isHost, connected: p.connected
+      team: p.team, isHost: p.isHost, connected: p.connected,
+      isBot: !!p.isBot
     }))
   };
 }
@@ -42,6 +43,7 @@ function stateFor(room, seat) {
   const validMoves = isMyTurn ? G.getValidMoves(myHand, gs.board, gs.mustTile, room.rules) : [];
 
   return {
+    roomCode:  room.code,
     gameType:  room.gameType,
     playMode:  room.playMode,
     rules:     room.rules,
@@ -88,7 +90,23 @@ function setTimer(room) {
   clearTimer(room);
   const secs = room.rules?.timerSecs ?? 60;
   if (!secs) return; // Timer disabled
+  // Bots don't use the timer — they're handled by scheduleBotPlay
+  const currentPlayer = room.players.find(p => p.seat === room.gs?.currentSeat);
+  if (currentPlayer?.isBot) return;
   room._timer = setTimeout(() => autoPlay(room), secs * 1000);
+}
+
+// ── Bot auto-play scheduler ───────────────────────────────────────────────────
+function scheduleBotPlay(room) {
+  if (room._botTimer) { clearTimeout(room._botTimer); room._botTimer = null; }
+  const gs = room.gs;
+  if (!gs || gs.status !== 'playing') return;
+  const currentPlayer = room.players.find(p => p.seat === gs.currentSeat);
+  if (!currentPlayer?.isBot) return;
+  room._botTimer = setTimeout(() => {
+    room._botTimer = null;
+    if (rooms.has(room.code)) autoPlay(room);
+  }, 1200);
 }
 function autoPlay(room) {
   const gs = room.gs;
@@ -155,6 +173,7 @@ function startRound(room) {
 
   setTimer(room);
   broadcast(room);
+  scheduleBotPlay(room);
 }
 
 // ── Play a tile ───────────────────────────────────────────────────────────────
@@ -228,6 +247,7 @@ function doDrawTile(room, seat) {
         gs.turnStartTime = Date.now();
         setTimer(room);
         broadcast(room);
+        scheduleBotPlay(room);
         return;
       }
     }
@@ -244,6 +264,7 @@ function doDrawTile(room, seat) {
       gs.turnStartTime = Date.now();
       setTimer(room);
       broadcast(room);
+      scheduleBotPlay(room);
     } else {
       // Still no moves — show the new tile briefly then auto-pass
       broadcast(room);
@@ -275,6 +296,7 @@ function nextTurn(room) {
   gs.turnStartTime = Date.now();
   setTimer(room);
   broadcast(room);
+  scheduleBotPlay(room);
 }
 
 // ── Add score for a seat (or team) ───────────────────────────────────────────
@@ -602,6 +624,37 @@ io.on('connection', socket => {
     room.status = 'playing';
     startRound(room);
     console.log(`[Room] Game started in ${code}`);
+  });
+
+  // ── ADD BOT ──────────────────────────────────────────────────────────────────
+  socket.on('add-bot', ({ code }) => {
+    const room = rooms.get(code);
+    if (!room || room.hostId !== socket.id || room.status !== 'lobby') return;
+    if (room.players.length >= room.playerCount)
+      return socket.emit('start-error', { message: 'Room is full.' });
+    const BOT_NAMES = ['BOT-Vas', 'BOT-Baku', 'BOT-Aze'];
+    const usedBots = room.players.filter(p => p.isBot).map(p => p.name);
+    const botName = BOT_NAMES.find(n => !usedBots.includes(n));
+    if (!botName) return;
+    const seat = room.players.length;
+    room.players.push({
+      id: `BOT_${seat}`, name: botName, seat,
+      team: null, isHost: false, connected: true, isBot: true
+    });
+    io.to(code).emit('lobby-updated', { room: lobbyRoom(room) });
+    console.log(`[Bot] ${botName} added to ${code}`);
+  });
+
+  // ── REMOVE BOT ───────────────────────────────────────────────────────────────
+  socket.on('remove-bot', ({ code, botName }) => {
+    const room = rooms.get(code);
+    if (!room || room.hostId !== socket.id || room.status !== 'lobby') return;
+    const idx = room.players.findIndex(p => p.isBot && p.name === botName);
+    if (idx === -1) return;
+    room.players.splice(idx, 1);
+    room.players.forEach((p, i) => { p.seat = i; }); // reassign seats after removal
+    io.to(code).emit('lobby-updated', { room: lobbyRoom(room) });
+    console.log(`[Bot] ${botName} removed from ${code}`);
   });
 
   // ── REMATCH ──────────────────────────────────────────────────────────────────

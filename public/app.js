@@ -210,6 +210,8 @@ function startGame() {
   socket.emit('start-game', { code: S.room.code });
 }
 function assignTeam(pid, team) { socket.emit('assign-team', { code: S.room.code, playerId: pid, team }); }
+function addBot()            { socket.emit('add-bot',    { code: S.room.code }); }
+function removeBot(botName)  { socket.emit('remove-bot', { code: S.room.code, botName }); }
 
 // ── Share or copy a link (Web Share API on mobile, clipboard fallback) ─────────
 function shareOrCopy(link, { title = 'Domino Game', text = 'Join my Domino game!', toastMsg = '🔗 Link copied!' } = {}) {
@@ -285,6 +287,27 @@ function renderLobby(room) {
   isTeams ? renderTeams(room) : renderIndividual(room);
   document.getElementById('host-ctrl').style.display = S.isHost ? 'block'  : 'none';
   document.getElementById('guest-msg').style.display = S.isHost ? 'none'   : 'block';
+
+  // ── Add Bot button (host only) ──────────────────────────────────────────────
+  if (S.isHost) {
+    const hostCtrl = document.getElementById('host-ctrl');
+    let addBotBtn = document.getElementById('add-bot-btn');
+    if (!addBotBtn) {
+      addBotBtn = document.createElement('button');
+      addBotBtn.id = 'add-bot-btn';
+      addBotBtn.className = 'btn btn-ghost btn-full';
+      addBotBtn.style.marginTop = '8px';
+      addBotBtn.onclick = addBot;
+      // Insert before start-err paragraph
+      const startErr = document.getElementById('start-err');
+      hostCtrl.insertBefore(addBotBtn, startErr);
+    }
+    const botsInRoom = room.players.filter(p => p.isBot).length;
+    const slotsLeft  = room.playerCount - room.players.length;
+    const canAdd     = slotsLeft > 0 && botsInRoom < 3;
+    addBotBtn.style.display  = canAdd ? 'block' : 'none';
+    addBotBtn.textContent    = `🤖 Add Bot Player (${slotsLeft} slot${slotsLeft !== 1 ? 's' : ''} left)`;
+  }
 }
 function renderIndividual(room) {
   const list = document.getElementById('list-individual'); list.innerHTML = '';
@@ -315,20 +338,25 @@ function makePlayerItem(p, room, teamCtx) {
   const nameEl = document.createElement('span'); nameEl.className = 'p-name'; nameEl.textContent = p.name;
   left.appendChild(nameEl);
   if (p.isHost) left.appendChild(mkBadge('Host','badge-host'));
+  if (p.isBot)  left.appendChild(mkBadge('🤖 BOT','badge-bot'));
   if (p.id === S.myId) left.appendChild(mkBadge('You','badge-you'));
   div.appendChild(left);
-  if (S.isHost && room.playMode === 'teams') {
+  if (S.isHost) {
     const right = document.createElement('div'); right.className = 'p-right';
-    if (teamCtx === null) {
-      // Only show a team button if that team still has room (max 2 per team)
-      const countA = room.players.filter(pl => pl.id !== p.id && pl.team === 'A').length;
-      const countB = room.players.filter(pl => pl.id !== p.id && pl.team === 'B').length;
-      if (countA < 2) right.appendChild(teamBtn('→ A', 'team-btn-a', () => assignTeam(p.id, 'A')));
-      if (countB < 2) right.appendChild(teamBtn('→ B', 'team-btn-b', () => assignTeam(p.id, 'B')));
-    } else {
-      right.appendChild(teamBtn('✕', 'team-btn-rm', () => assignTeam(p.id, null)));
+    if (room.playMode === 'teams') {
+      // Team assignment buttons (same logic for humans and bots)
+      if (teamCtx === null) {
+        const countA = room.players.filter(pl => pl.id !== p.id && pl.team === 'A').length;
+        const countB = room.players.filter(pl => pl.id !== p.id && pl.team === 'B').length;
+        if (countA < 2) right.appendChild(teamBtn('→ A', 'team-btn-a', () => assignTeam(p.id, 'A')));
+        if (countB < 2) right.appendChild(teamBtn('→ B', 'team-btn-b', () => assignTeam(p.id, 'B')));
+      } else {
+        right.appendChild(teamBtn('✕', 'team-btn-rm', () => assignTeam(p.id, null)));
+      }
     }
-    div.appendChild(right);
+    // Remove button for bots (all modes)
+    if (p.isBot) right.appendChild(teamBtn('🗑', 'team-btn-rm', () => removeBot(p.name)));
+    if (right.children.length > 0) div.appendChild(right);
   }
   return div;
 }
@@ -1007,18 +1035,39 @@ function toast(msg, type = '') {
 socket.on('connect', () => { S.myId = socket.id; });
 
 socket.on('room-created', ({ code, room }) => {
-  S.room = room; renderLobby(room); showView('lobby');
+  S.room = room;
+  try { sessionStorage.setItem('dg_room', JSON.stringify({ roomCode: code, playerName: S.myName })); } catch(e) {}
+  renderLobby(room); showView('lobby');
   toast('Room created! Share the link.', 'ok');
 });
-socket.on('room-joined',    ({ room })  => { S.room = room; renderLobby(room); showView('lobby'); });
+socket.on('room-joined', ({ room }) => {
+  S.room = room;
+  try { sessionStorage.setItem('dg_room', JSON.stringify({ roomCode: room.code, playerName: S.myName })); } catch(e) {}
+  renderLobby(room); showView('lobby');
+});
 socket.on('lobby-updated',  ({ room })  => { S.room = room; renderLobby(room); });
-socket.on('join-error',     ({ message }) => { document.getElementById('join-err').textContent = message; });
+socket.on('join-error', ({ message }) => {
+  if (S._autoReconnect) {
+    // Silent fail — room gone or game started without us; stay on home
+    S._autoReconnect = false;
+    try { sessionStorage.removeItem('dg_room'); } catch(e) {}
+    return;
+  }
+  document.getElementById('join-err').textContent = message;
+});
 socket.on('start-error',    ({ message }) => { document.getElementById('start-err').textContent = message; });
 socket.on('player-left',         ({ playerName }) => toast(`${playerName} left.`, 'err'));
 socket.on('player-disconnected', ({ playerName }) => toast(`${playerName} disconnected.`, 'err'));
 socket.on('player-reconnected',  ({ playerName }) => toast(`${playerName} reconnected!`, 'ok'));
 
 socket.on('game-update', (gs) => {
+  // Reconnect path: if S.room is null (e.g. after page refresh), restore from gs
+  if (!S.room && gs.roomCode) S.room = { code: gs.roomCode };
+  if (!S.myName && gs.players) {
+    const me = gs.players.find(p => p.seat === gs.mySeat);
+    if (me) S.myName = me.name;
+  }
+  S._autoReconnect = false;
   hideRoundOverlay();
   hideGameOverOverlay();
   showView('game');
@@ -1030,10 +1079,32 @@ socket.on('game-update', (gs) => {
   }
 });
 
-// ── URL room code autofill ─────────────────────────────────────────────────────
+// ── Quit game (clears session so auto-reconnect doesn't fire) ─────────────────
+function quitGame() {
+  try { sessionStorage.removeItem('dg_room'); } catch(e) {}
+  location.reload();
+}
+
+// ── URL room code autofill + sessionStorage auto-reconnect ────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  const code = new URLSearchParams(location.search).get('room');
-  if (code) { document.getElementById('join-code').value = code.toUpperCase(); showView('join'); }
+  const urlCode = new URLSearchParams(location.search).get('room');
+  if (urlCode) {
+    document.getElementById('join-code').value = urlCode.toUpperCase();
+    showView('join');
+    return;
+  }
+  // Try to auto-reconnect from sessionStorage (handles iOS pull-to-refresh)
+  try {
+    const saved = sessionStorage.getItem('dg_room');
+    if (saved) {
+      const { roomCode, playerName } = JSON.parse(saved);
+      if (roomCode && playerName) {
+        S.myName = playerName;
+        S._autoReconnect = true;
+        socket.emit('join-room', { code: roomCode, playerName });
+      }
+    }
+  } catch(e) { try { sessionStorage.removeItem('dg_room'); } catch(_) {} }
 });
 
 // ── Enter key shortcuts ────────────────────────────────────────────────────────
