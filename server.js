@@ -450,31 +450,37 @@ function endRound(room, winningSeat, reason) {
     }
   } else {
     if (is101) {
-      // 13-point threshold rule
-      if (gs.pendingOwner && gs.pendingOwner !== roundWinner) {
-        // Winner is different team — forfeits previous pending
-        gs.pendingPts  = 0;
+      // ── Forfeit opponent's pending when a different team wins ────────────────
+      if (gs.pendingOwner && gs.pendingOwner !== roundWinner && gs.pendingOwner !== 'tie') {
+        gs.pendingPts   = 0;
         gs.pendingOwner = null;
         pendingForfeited = true;
       }
 
-      const accumulated = (gs.pendingOwner === roundWinner ? gs.pendingPts : 0) + roundPts;
+      // ── "Threshold unlock" rule ──────────────────────────────────────────────
+      // Once a team (or player) has actual points on the board (score > 0),
+      // the 13-point threshold no longer applies to THEM for the rest of the game.
+      // The other team's threshold status is tracked independently.
+      // A round with roundPts >= 13 also unlocks and collects immediately.
+      const alreadyUnlocked = (gs.scores[roundWinner] || 0) > 0;
 
-      if (roundPts >= 13) {
-        // Collect everything
-        const total = (gs.pendingPts > 0 && gs.pendingOwner === roundWinner ? gs.pendingPts : 0) + roundPts;
+      if (alreadyUnlocked || roundPts >= 13) {
+        // Collect this round + any pending belonging to this winner
+        const pendingBonus = (gs.pendingPts > 0 && gs.pendingOwner === roundWinner)
+          ? gs.pendingPts : 0;
+        const total = roundPts + pendingBonus;
         gs.scores[roundWinner] = (gs.scores[roundWinner] || 0) + total;
         scoreAdded = total;
-        pendingAdd = gs.pendingPts;
+        pendingAdd = pendingBonus;
         gs.pendingPts   = 0;
         gs.pendingOwner = null;
       } else {
-        // < 13 — goes to pending
+        // Below threshold AND not yet unlocked → accumulate in pending
         if (gs.pendingOwner === roundWinner || gs.pendingOwner === null || gs.pendingOwner === 'tie') {
           gs.pendingPts  += roundPts;
           gs.pendingOwner = roundWinner;
         } else {
-          // Different winner than pending owner — forfeited above, now start new pending
+          // Forfeited above; start fresh pending for new winner
           gs.pendingPts  = roundPts;
           gs.pendingOwner = roundWinner;
         }
@@ -760,10 +766,6 @@ io.on('connection', socket => {
     console.log(`[-] ${player.name} left ${code}`);
   });
 });
-
-// ── Start server ──────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`\n🁣  Domino running at http://localhost:${PORT}\n`));
 
 // ── Start server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
