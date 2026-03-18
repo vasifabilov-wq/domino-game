@@ -664,7 +664,7 @@ function renderMyHand(gs) {
     const moveInfo = moves.find(m => m.tileIdx === idx);
     const isPlayable = gs.isMyTurn && !!moveInfo;
     const isSelected = S.selectedTileIdx === idx;
-    const tileEl = makeTile(a, b, { playable: isPlayable && !isSelected, selected: isSelected, disabled: gs.isMyTurn && !isPlayable && !isSelected });
+    const tileEl = makeTile(a, b, { playable: isPlayable && !isSelected, selected: isSelected, disabled: gs.isMyTurn && !isPlayable && !isSelected, vertical: true });
 
     if (isPlayable) {
       tileEl.onclick = () => selectTile(idx, moveInfo.sides);
