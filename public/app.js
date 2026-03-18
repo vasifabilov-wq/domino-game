@@ -1,3 +1,44 @@
+// ── Sound System (Web Audio API — no files needed) ────────────────────────────
+let _sfxCtx = null;
+function _sfx() {
+  if (!_sfxCtx) {
+    try { _sfxCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; }
+  }
+  if (_sfxCtx.state === 'suspended') _sfxCtx.resume();
+  return _sfxCtx;
+}
+// Short woody "clack" when a tile is placed
+function playTileSound() {
+  const ctx = _sfx(); if (!ctx) return;
+  try {
+    const len = Math.floor(ctx.sampleRate * 0.11);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d   = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.14));
+    const src  = ctx.createBufferSource(); src.buffer = buf;
+    const bp   = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 1.0;
+    const gain = ctx.createGain(); gain.gain.value = 0.55;
+    src.connect(bp); bp.connect(gain); gain.connect(ctx.destination);
+    src.start();
+  } catch(e) {}
+}
+// Short beep for last-10-seconds timer warning
+let _lastWarnSec = -1;
+function playTimerBeep() {
+  const ctx = _sfx(); if (!ctx) return;
+  try {
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.22, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.14);
+  } catch(e) {}
+}
+
 // ── Socket & State ────────────────────────────────────────────────────────────
 const socket = io();
 
@@ -51,11 +92,31 @@ function makeFaceDown(vertical = false) {
   return d;
 }
 
+// ── Mobile phone detection (portrait or landscape phone) ──────────────────────
+function isPhone() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const short = Math.min(w, h), long = Math.max(w, h);
+  return short <= 500 || w <= 640; // landscape phone (short side ≤500) or portrait phone
+}
+
+// ── Try to lock orientation to landscape (Android Chrome only; iOS ignores) ───
+async function tryLandscape() {
+  try {
+    if (document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen().catch(() => {});
+    }
+    if (screen.orientation?.lock) {
+      await screen.orientation.lock('landscape').catch(() => {});
+    }
+  } catch(e) { /* Graceful fail — rotate hint (CSS) handles iOS */ }
+}
+
 // ── Views ──────────────────────────────────────────────────────────────────────
 function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (name === 'game' && isPhone()) tryLandscape();
 }
 
 // ── Lobby option selectors ─────────────────────────────────────────────────────
@@ -397,18 +458,27 @@ function renderBoard(gs) {
 
 // ── How many tile-slots fit in one board row ────────────────────────────────────
 function calcTilesPerRow() {
+  // Phone (portrait OR landscape): single horizontal row — board scrolls sideways
+  if (isPhone()) return 9999;
   const wrap = document.getElementById('board-chain')?.parentElement;
   if (!wrap) return 8;
   const TILE_SLOT = 67; // board tile width (62) + gap (3) + a little breathing room
   return Math.max(4, Math.floor((wrap.clientWidth - 12) / TILE_SLOT));
 }
 
-// ── Scroll board to show the active end (last row of snake) ────────────────────
+// ── Scroll board to show the active end ────────────────────────────────────────
 function scrollToActive() {
   const wrap  = document.getElementById('board-chain')?.parentElement;
   const chain = document.getElementById('board-chain');
   if (!wrap || !chain) return;
-  // Single row: CSS margin:auto handles vertical centering; no manual scroll
+
+  if (isPhone()) {
+    // Phone (portrait or landscape): horizontal scroll → jump to right end (latest tile)
+    requestAnimationFrame(() => { wrap.scrollLeft = wrap.scrollWidth; });
+    return;
+  }
+
+  // Desktop snake: vertical scroll to last row
   const rows = chain.querySelectorAll('.chain-row');
   if (rows.length <= 1) {
     requestAnimationFrame(() => { wrap.scrollTop = 0; });
@@ -594,6 +664,7 @@ function selectTile(idx, sides) {
   if (S.selectedTileIdx === idx) { cancelSelect(); return; }
   // Only one valid placement → play immediately, no drop-zone UI needed
   if (sides.length === 1) {
+    playTileSound();
     socket.emit('play-tile', { tileIdx: idx, side: sides[0] });
     return;
   }
@@ -610,6 +681,7 @@ function cancelSelect() {
 }
 function playSide(side) {
   if (S.selectedTileIdx === null) return;
+  playTileSound();
   socket.emit('play-tile', { tileIdx: S.selectedTileIdx, side });
   S.selectedTileIdx   = null;
   S.selectedTileSides = [];
@@ -625,6 +697,8 @@ function renderTimer(gs) {
   // Hide timer if game not playing OR timer is disabled (timerSecs === 0)
   if (gs.status !== 'playing' || !gs.turnSecs) { bar.style.width = '0%'; txt.textContent = ''; return; }
 
+  _lastWarnSec = -1; // reset warning tracker on each turn
+
   const update = () => {
     const elapsed = (Date.now() - gs.turnStartTime) / 1000;
     const left    = Math.max(0, gs.turnSecs - elapsed);
@@ -633,6 +707,11 @@ function renderTimer(gs) {
     bar.className = 'timer-bar' + (pct < 25 ? ' urgent' : pct < 50 ? ' warn' : '');
     const m = Math.floor(left / 60), s = Math.floor(left % 60);
     txt.textContent = `${m}:${String(s).padStart(2,'0')}`;
+    // ⚠ Last 10 seconds warning beep (only on your turn, once per second)
+    if (gs.isMyTurn && left > 0 && left <= 10) {
+      const secNow = Math.ceil(left);
+      if (secNow !== _lastWarnSec) { _lastWarnSec = secNow; playTimerBeep(); }
+    }
   };
   update();
   S.timerInterval = setInterval(update, 500);

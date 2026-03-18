@@ -605,7 +605,36 @@ body:has(#view-game.active) {
   .opp-left  .opp-tile-back,
   .opp-right .opp-tile-back { width: 16px; height: 32px; }
 
-  /* Board snake tiles — slightly smaller on phone to fit 5+ per row */
+  /* ── Mobile board: horizontal scroll (single line, no snake wrap) ── */
+  /* This matches how real mobile domino apps (Domino!, Dominoes Gold) work */
+  .board-chain-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-direction: row;
+    align-items: center;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* hide scrollbar on mobile */
+  }
+  .board-chain-wrap::-webkit-scrollbar { display: none; }
+
+  .board-chain {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    padding: 4px 12px;
+    gap: 3px;
+  }
+
+  /* Override snake RTL reversal — all tiles flow left-to-right on mobile */
+  .chain-row.row-rtl { flex-direction: row; }
+
+  /* Center tiles if board fits on screen without scrolling */
+  .board-chain.solo-row .chain-row { justify-content: flex-start; }
+
+  /* Board tiles — slightly smaller on phone */
   .board-chain .tile.h { width: 56px; height: 28px; }
   .board-chain .tile.v { width: 28px; height: 56px; }
   .board-chain .tile .pip { width: 4px; height: 4px; }
@@ -631,16 +660,123 @@ body:has(#view-game.active) {
   .card-wrap  { padding: 20px 16px; }
 }
 
-/* Landscape phone */
-@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
-  .game-root { flex-direction: row; height: 100dvh; height: 100vh; padding: 4px; gap: 6px; }
-  .score-panel { width: 130px; flex-direction: column; max-height: none; font-size: .75rem; }
-  .table-wrap {
-    grid-template-columns: 52px 1fr 52px;
-    grid-template-rows: 70px 1fr auto;
+/* ── Rotate Hint Overlay (portrait phone only, during game) ──────────────── */
+.rotate-hint {
+  display: none; /* hidden by default, shown via media query */
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10,12,28,.92);
+  border: 1.5px solid rgba(124,111,247,.5);
+  border-radius: 40px;
+  padding: 10px 18px 10px 14px;
+  align-items: center;
+  gap: 12px;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 24px rgba(0,0,0,.6);
+  white-space: nowrap;
+  animation: hint-slide-up .4s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes hint-slide-up {
+  from { transform: translateX(-50%) translateY(60px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+}
+.rotate-phone-anim {
+  font-size: 1.4rem;
+  animation: phone-rotate 1.6s ease-in-out infinite;
+  display: inline-block;
+  transform-origin: center;
+}
+@keyframes phone-rotate {
+  0%,40%  { transform: rotate(0deg); }
+  60%,100%{ transform: rotate(90deg); }
+}
+.rotate-text { display: flex; flex-direction: column; gap: 1px; }
+.rotate-text strong { font-size: .85rem; color: #e2e8f0; }
+.rotate-text span   { font-size: .72rem; color: #7a8296; }
+.rotate-dismiss {
+  background: none; border: none; color: #7a8296;
+  font-size: 1rem; cursor: pointer; padding: 2px 4px;
+  line-height: 1; transition: color .15s;
+}
+.rotate-dismiss:hover { color: #e2e8f0; }
+
+/* Show hint ONLY: portrait + phone + game view active, not dismissed */
+@media (max-width: 900px) and (orientation: portrait) {
+  body:has(#view-game.active) .rotate-hint:not(.dismissed) {
+    display: flex;
   }
-  .tile.h { width: 68px; height: 34px; }
-  .pip { width: 5px; height: 5px; }
+}
+/* Always hide in landscape (user rotated → hint no longer needed) */
+@media (orientation: landscape) {
+  .rotate-hint { display: none !important; }
+}
+
+/* ── Landscape phone ─────────────────────────────────────────────────────── */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  .game-root { flex-direction: row; height: 100dvh; height: 100vh; padding: 4px; gap: 5px; }
+
+  /* Score panel: slim left column */
+  .score-panel {
+    width: 115px;
+    flex-direction: column;
+    max-height: none;
+    font-size: .72rem;
+    overflow-y: auto;
+    padding: 10px 10px;
+    border-radius: 12px;
+  }
+  .sp-scores { gap: 4px; }
+  .sp-pts { font-size: .92rem; }
+
+  /* Table: tighter grid, more board space */
+  .table-wrap {
+    grid-template-columns: 46px 1fr 46px;
+    grid-template-rows: 58px 1fr auto;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 12px;
+  }
+
+  /* Landscape board: also horizontal scroll (mirrors portrait fix) */
+  .board-chain-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-direction: row;
+    align-items: center;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .board-chain-wrap::-webkit-scrollbar { display: none; }
+  .board-chain {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    padding: 4px 12px;
+    gap: 3px;
+  }
+  .chain-row.row-rtl { flex-direction: row; }
+
+  /* Landscape tiles — slightly bigger than portrait since more horizontal space */
+  .board-chain .tile.h { width: 62px; height: 31px; }
+  .board-chain .tile.v { width: 31px; height: 62px; }
+  .board-chain .tile .pip { width: 5px; height: 5px; }
+
+  /* Hand tiles */
+  .tile.h { width: 72px; height: 36px; }
+  .tile.v { width: 36px; height: 72px; }
+  .pip { width: 6px; height: 6px; }
+
+  /* Compact hand area */
+  .my-area { gap: 5px; padding-bottom: 2px; }
+  .hand-wrap { gap: 5px; }
+  .my-label { font-size: .65rem; }
+  .opp-name { font-size: .68rem; }
 }
 
 /* ── Custom Rules (create form) ──────────────────────────────────────────── */

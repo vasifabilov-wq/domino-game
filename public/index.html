@@ -282,6 +282,16 @@
 
   </div><!-- end view-game -->
 
+  <!-- ── Rotate hint (portrait mobile only, auto-hides when in landscape) ── -->
+  <div class="rotate-hint" id="rotate-hint">
+    <div class="rotate-phone-anim">📱</div>
+    <div class="rotate-text">
+      <strong>Rotate your phone</strong>
+      <span>Landscape gives you the full board experience</span>
+    </div>
+    <button class="rotate-dismiss" onclick="document.getElementById('rotate-hint').classList.add('dismissed')" aria-label="Dismiss">✕</button>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <script src="/socket.io/socket.io.js"></script>
