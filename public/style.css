@@ -479,6 +479,49 @@ body:has(#view-game.active) {
 .toast.ok  { border-color: var(--success); color: var(--success); }
 .toast.err { border-color: var(--danger);  color: var(--danger);  }
 
+/* ── Spinner cross layout ────────────────────────────────────────────────── */
+/* The spinner tile has up-to-4 arms; top/bottom arms stack above/below it.
+   This flex-column layout makes the cross visually connected. */
+.spinner-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  position: relative;
+}
+/* Faint vertical line connecting arm tiles to the spinner tile */
+.spinner-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,.08);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 0;
+}
+.arm-tiles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  position: relative;
+  z-index: 1;
+}
+/* The spinner tile itself needs z-index to sit above the connector line */
+.spinner-tile { position: relative; z-index: 1; flex-shrink: 0; }
+
+/* Locked arm indicator (shown before arms are open) */
+.arm-locked {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.07);
+  border: 1px dashed rgba(255,255,255,.25);
+  position: relative; z-index: 1;
+}
+
 /* ── Board nav buttons (◀/▶ phone scroll helpers) ────────────────────────── */
 /* Hidden by default; shown only inside phone media queries if ever re-enabled */
 .bnb {
@@ -621,11 +664,22 @@ body:has(#view-game.active) {
 }
 
 /* ── Responsive / Mobile ──────────────────────────────────────────────────── */
-/* Tablets and small desktops */
+/* Tablets and small desktops (iPads, smaller laptops) */
 @media (max-width: 900px) {
   .score-panel { width: 150px; font-size: .8rem; }
   .tile.h { width: 66px; height: 33px; }
   .tile.v { width: 33px; height: 66px; }
+}
+
+/* ── Tablet board tile density (iPad / small desktop ≤ 1100px) ──────────── */
+/* Slightly smaller board tiles so more fit per row without scaling.
+   At 52px wide: a 600px board holds ~11 tiles/row vs ~9 at 62px.
+   Helps with 20+ tile boards in 4-player games. */
+@media (max-width: 1100px) and (min-width: 641px) {
+  .board-chain .tile.h { width: 52px; height: 26px; }
+  .board-chain .tile.v { width: 26px; height: 52px; }
+  .board-chain .tile .pip { width: 4px; height: 4px; }
+  .board-chain .tile .tile-half { padding: 2px; gap: 1px; }
 }
 
 /* Phones — portrait + landscape */

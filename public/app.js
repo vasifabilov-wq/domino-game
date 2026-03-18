@@ -486,8 +486,12 @@ function updateBoardEnds(board) {
 function calcTilesPerRow() {
   const wrap = document.getElementById('board-chain')?.parentElement;
   if (!wrap) return 8;
-  // Phone tiles are 44px wide; desktop tiles are 62px — use correct slot size
-  const TILE_SLOT = isPhone() ? 50 : 67;
+  // Slot sizes match CSS tile widths + gap:
+  //   phone   ≤640px  → 44px tile → 50px slot
+  //   tablet  641–1100px → 52px tile → 58px slot
+  //   desktop >1100px → 62px tile → 67px slot
+  const w = window.innerWidth;
+  const TILE_SLOT = isPhone() ? 50 : w <= 1100 ? 58 : 67;
   return Math.max(3, Math.floor((wrap.clientWidth - 12) / TILE_SLOT));
 }
 
