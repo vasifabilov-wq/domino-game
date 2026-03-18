@@ -1231,3 +1231,190 @@ body:has(#view-game.active) {
   .graveyard-card { padding: 14px; max-height: 75vh; }
   .gv-tile { width: 30px; height: 54px; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UI/UX MOBILE UPGRADE  ────────────────────────────────────────────────────
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Richer felt board texture ───────────────────────────────────────────── */
+.table-wrap {
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(255,255,255,.03) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(0,0,0,.12) 0%, transparent 55%),
+    repeating-linear-gradient(
+      0deg,
+      transparent, transparent 18px,
+      rgba(0,0,0,.04) 18px, rgba(0,0,0,.04) 19px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent, transparent 18px,
+      rgba(0,0,0,.04) 18px, rgba(0,0,0,.04) 19px
+    ),
+    linear-gradient(160deg, #1e4430 0%, #163324 50%, #1a3a2a 100%);
+  box-shadow: inset 0 0 40px rgba(0,0,0,.3);
+}
+
+/* ── Hand header (label + sort button row) ──────────────────────────────── */
+.hand-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+/* ── Sort button ─────────────────────────────────────────────────────────── */
+.hand-sort-btn {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-hi);
+  background: var(--surface3);
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.hand-sort-btn:hover { background: var(--surface2); color: var(--text); }
+.hand-sort-btn.on {
+  background: rgba(124,111,247,.18);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* ── Your Turn banner ────────────────────────────────────────────────────── */
+.your-turn-banner {
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.7);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #7c6ff7 0%, #34d399 100%);
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 900;
+  padding: 14px 36px;
+  border-radius: 24px;
+  z-index: 600;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow:
+    0 0 0 3px rgba(124,111,247,.35),
+    0 12px 40px rgba(0,0,0,.55),
+    0 4px 12px rgba(52,211,153,.25);
+  transition: opacity .25s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
+  letter-spacing: 1px;
+  text-shadow: 0 2px 6px rgba(0,0,0,.3);
+  will-change: transform, opacity;
+}
+.your-turn-banner.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.ytb-dice {
+  font-size: 1.8rem;
+  display: inline-block;
+  animation: ytb-bounce .5s cubic-bezier(.34,1.56,.64,1) .1s both;
+}
+.ytb-text {
+  display: inline-block;
+  animation: ytb-slide .35s cubic-bezier(.34,1.56,.64,1) .05s both;
+}
+@keyframes ytb-bounce {
+  from { transform: scale(0) rotate(-20deg); }
+  to   { transform: scale(1) rotate(0deg); }
+}
+@keyframes ytb-slide {
+  from { transform: translateX(-10px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@media (max-width: 640px) {
+  .your-turn-banner { font-size: 1.25rem; padding: 12px 28px; gap: 10px; top: 42%; }
+  .ytb-dice { font-size: 1.5rem; }
+}
+
+/* ── Last played tile highlight on board ─────────────────────────────────── */
+.tile.last-played {
+  box-shadow:
+    0 0 0 2px rgba(52,211,153,.7),
+    0 0 14px rgba(52,211,153,.3),
+    0 4px 12px rgba(0,0,0,.4),
+    inset 0 1.5px 0 rgba(255,255,255,.9);
+  border-color: #34d399;
+  z-index: 2;
+  position: relative;
+}
+
+/* ── Mobile turn indicator badge (shown in score panel on phone) ─────────── */
+.sp-turn-badge {
+  display: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .5px;
+  white-space: nowrap;
+  background: rgba(124,111,247,.15);
+  border: 1px solid rgba(124,111,247,.4);
+  color: #c4b5fd;
+}
+.sp-turn-badge.is-mine {
+  background: rgba(52,211,153,.15);
+  border-color: rgba(52,211,153,.4);
+  color: #34d399;
+}
+@media (max-width: 640px) {
+  .sp-turn-badge { display: inline-flex; }
+}
+
+/* ── Improved action buttons for mobile ─────────────────────────────────── */
+@media (max-width: 640px) {
+  .action-btns { gap: 8px; width: 100%; justify-content: center; }
+  .btn-draw, .btn-pass {
+    flex: 1;
+    min-width: 0;
+    max-width: 160px;
+    padding: 13px 16px;
+    font-size: .92rem;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+  }
+  /* Hand: scrollable horizontal row on phone */
+  .hand-wrap {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding: 4px 6px;
+    width: 100%;
+    max-width: 100%;
+  }
+  .hand-wrap::-webkit-scrollbar { display: none; }
+  /* Tiles: slightly bigger on phone for better touch */
+  .tile.h { width: 82px; height: 41px; }
+  .tile.v { width: 41px; height: 82px; }
+}
+
+/* ── Tile touch feedback ─────────────────────────────────────────────────── */
+@media (hover: none) {
+  .tile.playable:active {
+    transform: translateY(-4px) scale(1.03);
+  }
+  .tile.selected {
+    transform: translateY(-10px);
+  }
+}
+
+/* ── Score panel: compact mobile turn badge placement ───────────────────── */
+@media (max-width: 640px) {
+  .sp-head { gap: 6px; align-items: center; }
+}

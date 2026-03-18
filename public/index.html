@@ -49,11 +49,11 @@
         <label class="field-label">Game Type</label>
         <div class="option-grid" id="sel-gametype">
           <div class="opt-card selected" data-val="5s" onclick="pickOpt('gametype',this)">
-            <div class="opt-title">🟡 5s — All Fives</div>
-            <div class="opt-desc">Score multiples of 5 during play. First to 275 wins.</div>
+            <div class="opt-title">🟡 Telephone — All Fives</div>
+            <div class="opt-desc">Score multiples of 5 during play. First to 365 wins.</div>
           </div>
           <div class="opt-card" data-val="101" onclick="pickOpt('gametype',this)">
-            <div class="opt-title">🟤 101 — Kozel</div>
+            <div class="opt-title">🟤 101 — Domino</div>
             <div class="opt-desc">Round-based scoring with 13pt threshold. First to 101 wins.</div>
           </div>
         </div>
@@ -247,7 +247,10 @@
 
         <!-- My hand + controls -->
         <div class="my-area">
-          <div class="my-label" id="my-label">Your Hand</div>
+          <div class="hand-header">
+            <span class="my-label" id="my-label">Your Hand</span>
+            <button class="hand-sort-btn" id="hand-sort-btn" onclick="sortHand()" title="Sort tiles by pip value">⇅ Sort</button>
+          </div>
           <div class="hand-wrap" id="my-hand"></div>
           <!-- Side selection -->
           <div class="side-btns" id="side-btns" style="display:none">
@@ -266,6 +269,12 @@
       </div><!-- end table-wrap -->
 
     </div><!-- end game-root -->
+
+    <!-- Your Turn banner (animated overlay, auto-hides) -->
+    <div id="your-turn-banner" class="your-turn-banner" style="display:none">
+      <span class="ytb-dice">🎲</span>
+      <span class="ytb-text">Your Turn!</span>
+    </div>
 
     <!-- Graveyard overlay -->
     <div id="graveyard-overlay" class="graveyard-overlay" style="display:none">

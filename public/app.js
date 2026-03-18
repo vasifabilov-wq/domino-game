@@ -39,6 +39,33 @@ function playTimerBeep() {
   } catch(e) {}
 }
 
+// ── Haptic helper (Web Vibration API — silent on unsupported devices) ─────────
+function vibrate(ms) { try { navigator.vibrate?.(ms); } catch(e) {} }
+
+// ── Your-Turn banner ──────────────────────────────────────────────────────────
+let _prevMyTurn = false;
+function showYourTurnBanner() {
+  const banner = document.getElementById('your-turn-banner');
+  if (!banner) return;
+  banner.style.display = 'flex';
+  requestAnimationFrame(() => {
+    banner.classList.add('show');
+    setTimeout(() => {
+      banner.classList.remove('show');
+      setTimeout(() => { banner.style.display = 'none'; }, 350);
+    }, 1400);
+  });
+}
+
+// ── Hand sort ─────────────────────────────────────────────────────────────────
+let _handSorted = false;
+function sortHand() {
+  _handSorted = !_handSorted;
+  const btn = document.getElementById('hand-sort-btn');
+  if (btn) btn.classList.toggle('on', _handSorted);
+  if (S.gs) renderMyHand(S.gs);
+}
+
 // ── Socket & State ────────────────────────────────────────────────────────────
 const socket = io();
 
@@ -280,7 +307,7 @@ function fallCopy(text, cb) {
 function renderLobby(room) {
   S.room   = room;
   S.isHost = room.hostId === S.myId;
-  const gameLabel = room.gameType === '5s' ? '5s — All Fives' : '101 — Kozel';
+  const gameLabel = room.gameType === '5s' ? 'Telephone — All Fives' : '101 — Domino';
   document.getElementById('lob-title').textContent    = gameLabel;
   document.getElementById('lob-subtitle').textContent = `${room.playerCount} Players · ${room.playMode === 'teams' ? '2v2 Teams' : 'Individual'}`;
   document.getElementById('lob-code').textContent     = room.code;
@@ -411,6 +438,12 @@ function renderGame(gs) {
   renderMyHand(gs);
   renderTimer(gs);
   if (gs.lastScore > 0) showScoreFlash(gs.lastScore);
+  // "Your Turn" banner + haptic when the turn first switches to this player
+  if (gs.isMyTurn && !_prevMyTurn) {
+    showYourTurnBanner();
+    vibrate(80);
+  }
+  _prevMyTurn = gs.isMyTurn;
 }
 
 // ── Board ──────────────────────────────────────────────────────────────────────
@@ -536,6 +569,26 @@ function renderBoard(gs) {
   }
   // Single-row board: CSS centres tiles horizontally via .solo-row
   if (chain.children.length === 1) chain.classList.add('solo-row');
+
+  // Highlight the most recently played tile (subtle green glow)
+  if (gs.lastPlayedTile) {
+    const [la, lb] = gs.lastPlayedTile;
+    // Find last tile element in chain matching the value (most recently appended)
+    const allTileEls = Array.from(chain.querySelectorAll('.tile:not(.spinner-tile)'));
+    // Walk from end to find first matching tile by pip values
+    for (let i = allTileEls.length - 1; i >= 0; i--) {
+      const el = allTileEls[i];
+      const halves = el.querySelectorAll('.tile-half');
+      if (halves.length === 2) {
+        const pA = halves[0].querySelectorAll('.pip.on').length;
+        const pB = halves[1].querySelectorAll('.pip.on').length;
+        if ((pA === la && pB === lb) || (pA === lb && pB === la)) {
+          el.classList.add('last-played');
+          break;
+        }
+      }
+    }
+  }
 
   // Update open-ends indicator
   updateBoardEnds(gs.board);
@@ -700,7 +753,7 @@ function graveyardPickTile() {
 
 // ── Score panel ────────────────────────────────────────────────────────────────
 function renderScorePanel(gs) {
-  document.getElementById('sp-gametype').textContent = gs.gameType === '5s' ? '5s — All Fives' : '101 — Kozel';
+  document.getElementById('sp-gametype').textContent = gs.gameType === '5s' ? 'Telephone — All Fives' : '101 — Domino';
   document.getElementById('sp-round').textContent    = `Round ${gs.round}`;
   const scoresEl = document.getElementById('sp-scores');
   scoresEl.innerHTML = '';
@@ -818,6 +871,19 @@ function renderPlayers(gs) {
     const teamInfo = gs.playMode === 'teams' ? ` · Team ${curP.team}` : '';
     spTurn.innerHTML = `<strong>${name}</strong>${teamInfo}`;
   }
+  // Mobile turn badge (visible only on phones via CSS)
+  let badge = document.getElementById('sp-turn-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.id = 'sp-turn-badge';
+    badge.className = 'sp-turn-badge';
+    document.getElementById('sp-head')?.appendChild(badge);
+  }
+  if (curP) {
+    const isMine = curP.seat === me;
+    badge.textContent = isMine ? '🎲 Your Turn' : `${curP.name}`;
+    badge.classList.toggle('is-mine', isMine);
+  }
 }
 
 // ── My hand ────────────────────────────────────────────────────────────────────
@@ -833,9 +899,27 @@ function renderMyHand(gs) {
   sideBtns.style.display = 'none';
   actBtns.style.display  = 'none';
 
-  label.textContent = gs.isMyTurn ? '🎲 Your Turn — Pick a tile' : `Your Hand (${hand.length} tiles)`;
+  const playableCount = moves.length;
+  if (gs.isMyTurn) {
+    label.textContent = playableCount > 0
+      ? `🎲 Your Turn — ${playableCount} playable`
+      : `🎲 Your Turn`;
+  } else {
+    label.textContent = `Your Hand (${hand.length})`;
+  }
 
-  hand.forEach((tile, idx) => {
+  // Build display items with original indices preserved (sort doesn't change server indices)
+  let items = hand.map((tile, idx) => ({ tile, idx }));
+  if (_handSorted) {
+    items = [...items].sort((a, b) => {
+      const sumA = a.tile[0] + a.tile[1];
+      const sumB = b.tile[0] + b.tile[1];
+      if (sumA !== sumB) return sumA - sumB;
+      return Math.max(a.tile[0], a.tile[1]) - Math.max(b.tile[0], b.tile[1]);
+    });
+  }
+
+  items.forEach(({ tile, idx }) => {
     const [a, b] = tile;
     const moveInfo = moves.find(m => m.tileIdx === idx);
     const isPlayable = gs.isMyTurn && !!moveInfo;
@@ -901,9 +985,11 @@ function selectTile(idx, sides) {
   // Only one valid placement → play immediately, no drop-zone UI needed
   if (sides.length === 1) {
     playTileSound();
+    vibrate(45);
     socket.emit('play-tile', { tileIdx: idx, side: sides[0] });
     return;
   }
+  vibrate(18);    // light buzz for selection
   S.selectedTileIdx   = idx;
   S.selectedTileSides = sides;
   renderMyHand(S.gs);
@@ -918,6 +1004,7 @@ function cancelSelect() {
 function playSide(side) {
   if (S.selectedTileIdx === null) return;
   playTileSound();
+  vibrate(45);
   socket.emit('play-tile', { tileIdx: S.selectedTileIdx, side });
   S.selectedTileIdx   = null;
   S.selectedTileSides = [];
