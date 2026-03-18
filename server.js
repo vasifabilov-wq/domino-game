@@ -552,6 +552,9 @@ io.on('connection', socket => {
       return;
     }
 
+    // Cancel pending delete timer if room was waiting for someone
+    if (room._deleteTimer) { clearTimeout(room._deleteTimer); room._deleteTimer = null; }
+
     if (room.players.length >= room.playerCount) return socket.emit('join-error', { message: 'Room is full.' });
     if (room.players.some(p => p.name.toLowerCase() === playerName.toLowerCase()))
       return socket.emit('join-error', { message: 'Name already taken.' });
@@ -637,8 +640,15 @@ io.on('connection', socket => {
         room.hostId = room.players[0].id;
         room.players[0].isHost = true;
       }
-      if (room.players.length === 0) rooms.delete(code);
-      else {
+      if (room.players.length === 0) {
+        // Don't delete immediately — give 60s grace window for host to reconnect
+        room._deleteTimer = setTimeout(() => {
+          if (rooms.get(code)?.players.length === 0) {
+            rooms.delete(code);
+            console.log(`[Room] ${code} expired (empty)`);
+          }
+        }, 60000);
+      } else {
         io.to(code).emit('player-left', { playerName: player.name });
         io.to(code).emit('lobby-updated', { room: lobbyRoom(room) });
       }
