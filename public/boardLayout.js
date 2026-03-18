@@ -28,19 +28,32 @@
   'use strict';
 
   // ── Tile geometry (board scale) ─────────────────────────────────────────────
-  const TW   = 54;          // long  side of a horizontal tile  (px)
-  const TH   = 27;          // short side of a horizontal tile  (px)
-  const GAP  = 3;           // gap between adjacent tiles        (px)
-  const SLOT = TW + GAP;    // path advance per tile = 57        (px)
-  const ROW_H = TH + GAP;   // vertical row step = 30            (px)
-  const MX   = 8;           // horizontal margin from board edge (px)
-  // First row: vertical center set so V tiles never go negative.
-  // CY0 = TW/2 + buffer = 27 + 4 = 31
-  const CY0  = Math.ceil(TW / 2) + 4;
+  const TW = 54;          // long  side of a horizontal tile  (px) — matches CSS
+  const TH = 27;          // short side of a horizontal tile  (px) — matches CSS
 
-  // Drop-zone geometry (must match CSS .drop-zone)
-  const DZ_W = 42;
-  const DZ_H = 38;
+  // ── Spacing constants (TILE_GAP / LANE_GAP philosophy) ──────────────────────
+  // Adapted from the companion layout-engine spec:
+  //   TILE_GAP = horizontal gap between adjacent chain tiles
+  //   LANE_GAP = extra vertical breathing room between snake rows
+  //              (on top of tile height, so rows never touch or overlap)
+  const TILE_GAP = 8;            // px between tiles along the chain   ← was 3
+  const LANE_GAP = 16;           // extra px between snake row centres  ← was implicit 0
+
+  // Derived constants
+  const GAP   = TILE_GAP;        // alias used by spacing math
+  const SLOT  = TW + GAP;        // path advance per tile = 62          ← was 57
+  // ROW_H must be ≥ TW/2 + TH/2 (= 40) to prevent corner-tile overlap with
+  // the adjacent row.  TH + LANE_GAP = 27 + 16 = 43 → 3 px clearance. ✓
+  const ROW_H = TH + LANE_GAP;   // vertical step between row centres = 43  ← was 30
+  const MX    = 12;              // horizontal margin from board edge    ← was 8
+
+  // First row: vertical centre ≥ TW/2 so vertical tiles never clip the top edge.
+  // CY0 = TW/2 + TILE_GAP = 27 + 8 = 35                               ← was 31
+  const CY0 = Math.ceil(TW / 2) + TILE_GAP;
+
+  // Drop-zone geometry (must match CSS .board-chain .drop-zone)
+  const DZ_W = 46;               // ← was 42
+  const DZ_H = 42;               // ← was 38
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 

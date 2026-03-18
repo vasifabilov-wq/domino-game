@@ -1482,11 +1482,11 @@ body:has(#view-game.active) {
   justify-content: flex-start;
 }
 
-/* Drop zone size (must match BoardLayout.DZ_W=42, DZ_H=38) */
+/* Drop zone size (must match BoardLayout.DZ_W=46, DZ_H=42) */
 .board-chain .drop-zone {
-  width:  42px;
-  height: 38px;
-  min-width: 42px;
+  width:  46px;
+  height: 42px;
+  min-width: 46px;
   padding: 2px 4px;
 }
 .board-chain .drop-zone .dz-arrow { font-size: 1.1rem; }
