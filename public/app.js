@@ -211,22 +211,35 @@ function startGame() {
 }
 function assignTeam(pid, team) { socket.emit('assign-team', { code: S.room.code, playerId: pid, team }); }
 
-// ── Copy game link (in-game, from score panel) ────────────────────────────────
-function copyGameLink() {
-  if (!S.room?.code) return;
-  const link = `${location.origin}/?room=${S.room.code}`;
-  const ok = () => toast('🔗 Rejoin link copied!', 'ok');
+// ── Share or copy a link (Web Share API on mobile, clipboard fallback) ─────────
+function shareOrCopy(link, { title = 'Domino Game', text = 'Join my Domino game!', toastMsg = '🔗 Link copied!' } = {}) {
+  if (navigator.share) {
+    navigator.share({ title, text, url: link }).catch(() => {});
+    return;
+  }
+  const ok = () => toast(toastMsg, 'ok');
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(link).then(ok).catch(() => fallCopy(link, ok));
   else fallCopy(link, ok);
 }
 
-// ── Copy share link ────────────────────────────────────────────────────────────
+// ── Copy/Share game link (in-game, from score panel) ─────────────────────────
+function copyGameLink() {
+  if (!S.room?.code) return;
+  const link = `${location.origin}/?room=${S.room.code}`;
+  shareOrCopy(link, { text: `Join my Domino game! Room: ${S.room.code}`, toastMsg: '🔗 Rejoin link copied!' });
+}
+
+// ── Share/copy lobby invite link ───────────────────────────────────────────────
 function copyLink() {
   const link = `${location.origin}/?room=${S.room.code}`;
   const btn  = document.getElementById('copy-btn');
+  if (navigator.share) {
+    navigator.share({ title: 'Domino Game', text: `Join my Domino game! Room: ${S.room.code}`, url: link }).catch(() => {});
+    return;
+  }
   const ok = () => {
-    btn.textContent = 'Copied!'; btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'Copy Link'; btn.classList.remove('copied'); }, 2200);
+    btn.textContent = '✓ Copied!'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '📤 Share'; btn.classList.remove('copied'); }, 2200);
     toast('🔗 Link copied!', 'ok');
   };
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(link).then(ok).catch(() => fallCopy(link, ok));
