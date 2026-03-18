@@ -450,16 +450,31 @@ function renderBoard(gs) {
     if (selSides.includes('right')) elements.push(makeDropZone('right', '▶', ''));
   }
 
-  // ── Phase 2: Arrange into snake rows ────────────────────────────────────────
-  // RTL rows use CSS flex-direction:row-reverse, so DOM order stays logical
-  // but the visual snake turns at each row end naturally.
+  // ── Phase 2: Arrange into snake rows with corner tiles ──────────────────────
+  // For each complete (non-last) row the final tile is placed perpendicular —
+  // matching real domino where the turning tile signals the snake bend.
+  // LTR row: corner tile ends at the RIGHT edge.
+  // RTL row (row-reverse): corner tile is DOM-last → appears at LEFT visual edge.
   const perRow = calcTilesPerRow();
   let rowIdx = 0;
   for (let i = 0; i < elements.length; i += perRow, rowIdx++) {
-    const row = document.createElement('div');
     const isLast = (i + perRow >= elements.length);
+    const row = document.createElement('div');
     row.className = 'chain-row ' + (rowIdx % 2 === 0 ? 'row-ltr' : 'row-rtl');
     if (isLast) row.dataset.lastRow = '1';
+
+    // Corner tile: last element of each complete row, if it's a plain tile
+    if (!isLast) {
+      const cornerEl = elements[i + perRow - 1];
+      if (cornerEl?.classList.contains('tile')) {
+        if (cornerEl.classList.contains('h')) {
+          cornerEl.classList.remove('h');
+          cornerEl.classList.add('v');
+        }
+        cornerEl.classList.add('corner-tile');
+      }
+    }
+
     elements.slice(i, i + perRow).forEach(el => row.appendChild(el));
     chain.appendChild(row);
   }
@@ -492,7 +507,9 @@ function calcTilesPerRow() {
     //   game-root padding: 6px×2=12  table padding: 8px×2=16  → total ~28px
     //   No side opponent columns in portrait → full width available
     const boardW = Math.max(80, w - 28);
-    return Math.max(3, Math.floor(boardW / 54));
+    // Corner tile at row-end is vertical (half the h-tile width).
+    // Optimal packing: (perRow-1)×54 + 27 ≤ boardW → perRow ≤ (boardW+27)/54
+    return Math.max(3, Math.floor((boardW + 27) / 54));
   }
   // Desktop/tablet: DOM measurement is safe (layout is stable by this point)
   const wrap = document.getElementById('board-chain')?.parentElement;

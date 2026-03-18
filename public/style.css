@@ -376,6 +376,14 @@ body:has(#view-game.active) {
 .board-chain .tile.h { width: 62px; height: 31px; }
 .board-chain .tile.v { width: 31px; height: 62px; }
 
+/* Corner tile — the perpendicular tile at each row turn, like real domino */
+.board-chain .tile.corner-tile {
+  border-color: rgba(201,160,80,.85);
+  box-shadow:
+    0 0 0 1.5px rgba(251,191,36,.35),
+    0 2px 8px rgba(0,0,0,.45);
+}
+
 .tile-half {
   flex: 1;
   display: grid;
