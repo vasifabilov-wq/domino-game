@@ -26,11 +26,12 @@
 
   // ── Spacing constants ───────────────────────────────────────────────────────
   const SPACING = {
-    GAP:      8,   // px between tiles along the chain
-    LANE_GAP: 18,  // extra vertical gap between snake rows (above tile height)
-    MX:       12,  // horizontal margin from board edge
-    DZ_W:     44,  // drop-zone width
-    DZ_H:     40,  // drop-zone height
+    GAP:  2,   // px between tiles along the chain (nearly touching)
+    MX:   12,  // horizontal margin from board edge
+    DZ_W: 44,  // drop-zone width
+    DZ_H: 40,  // drop-zone height
+    // LANE_GAP is derived from TH in forBoard() — must equal TH/2 so the
+    // corner tile's bottom face aligns with the top face of the next row.
   };
 
   // ── Push constants to CSS so CSS vars always match JS ──────────────────────
@@ -53,7 +54,10 @@
   function forBoard(boardW) {
     const { TW, TH } = getTileSize(boardW);
     _applyCSS(TW, TH);
-    const { GAP, MX, DZ_W, DZ_H, LANE_GAP } = SPACING;
+    const { GAP, MX, DZ_W, DZ_H } = SPACING;
+    // LANE_GAP = TH/2 means: corner tile bottom (cy + TH) exactly meets
+    // the next row's first tile top (new_cy - TH/2), i.e. ROW_H = 3*TH/2.
+    const LANE_GAP = Math.ceil(TH / 2);
     return {
       TW,
       TH,
@@ -61,8 +65,9 @@
       MX,
       DZ_W,
       DZ_H,
+      LANE_GAP,
       SLOT:  TW + GAP,       // path advance per tile slot
-      ROW_H: TH + LANE_GAP,  // vertical step between snake row centres
+      ROW_H: TH + LANE_GAP,  // vertical step between snake row centres (≈ 3*TH/2)
     };
   }
 
