@@ -4,7 +4,8 @@
   "description": "Multiplayer Domino Game - 5s and 101",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "echo \"No tests defined\" && exit 0"
   },
   "dependencies": {
     "express": "^4.18.2",
