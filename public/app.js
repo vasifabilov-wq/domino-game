@@ -600,11 +600,12 @@ function updateBoardEnds(board) {
   document.getElementById('board-end-right').textContent = `${board.rightEnd ?? '–'} ▶`;
 }
 
-// ── calcTilesPerRow: kept as shim (no longer used by renderBoard) ──────────────
+// ── calcTilesPerRow: legacy shim — not used, kept for safety ──────────────────
 function calcTilesPerRow() {
   const boardArea = document.getElementById('board-area');
   const boardW    = boardArea ? Math.max(180, boardArea.clientWidth - 4) : 320;
-  return Math.max(3, Math.floor((boardW - 16 + BoardLayout.GAP) / BoardLayout.SLOT));
+  const C = Tokens.forBoard(boardW);
+  return Math.max(3, Math.floor((boardW - 2 * C.MX) / C.TW));
 }
 
 // ── Scroll board to show the most recently placed tiles ───────────────────────

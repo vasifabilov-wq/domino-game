@@ -1,21 +1,25 @@
 /**
  * tokens.js — Single source of truth for ALL visual game constants.
  *
- * RULE: No other file may hardcode tile dimensions, gaps, or colors.
+ * DESIGN CONTRACT:
+ *   • Tile geometry: TH = TW / 2  (each pip-square is TH × TH)
+ *   • GAP = 0  → tiles touch face-to-face (correct domino semantics)
+ *   • SLOT = TW  → cursor advances exactly one tile-width per horizontal slot
+ *   • ROW_H = TW  → = 2×TH, gives TH/2 (≈11–15 px) visible gap between rows
+ *       so non-connected tiles in the same column never visually touch.
+ *       (The previous ceil(TH×1.5) left only 0.5 px, causing the row-1
+ *       left-corner to appear merged with tile-0 on narrow boards.)
  *
- * ARCHITECTURE:
- *   1. JS calls Tokens.forBoard(boardW) to get layout constants.
- *   2. This module writes matching CSS custom properties so CSS and JS
- *      always agree — no !important wars, no out-of-sync breakpoints.
- *   3. BoardLayout.js reads from Tokens only, never from the DOM.
+ * PUBLIC API:
+ *   Tokens.forBoard(boardW)  →  { TW, TH, SLOT, ROW_H, MX, DZ_W, DZ_H }
+ *   (also writes matching CSS custom properties as a side-effect)
  */
 (function (global) {
   'use strict';
 
-  // ── Tile size table (mobile-first, driven by available board width) ─────────
-  // TW = long side of a horizontal tile
-  // TH = short side  (always TW / 2 so doubles are perfectly square)
-  function getTileSize(boardW) {
+  // ── Tile size table (mobile-first, keyed on available board width) ──────────
+  // TH is always TW/2 so every pip-square is perfectly square.
+  function _tileSize(boardW) {
     if (boardW <= 260) return { TW: 38, TH: 19 };
     if (boardW <= 320) return { TW: 42, TH: 21 };
     if (boardW <= 420) return { TW: 46, TH: 23 };
@@ -24,53 +28,41 @@
     return               { TW: 62, TH: 31 };
   }
 
-  // ── Spacing constants ───────────────────────────────────────────────────────
-  const SPACING = {
-    GAP:  2,   // px between tiles along the chain (nearly touching)
-    MX:   12,  // horizontal margin from board edge
-    DZ_W: 44,  // drop-zone width
-    DZ_H: 40,  // drop-zone height
-    // LANE_GAP is derived from TH in forBoard() — must equal TH/2 so the
-    // corner tile's bottom face aligns with the top face of the next row.
-  };
+  // ── Fixed layout constants ──────────────────────────────────────────────────
+  const MX   = 12;   // horizontal margin from board edge to chain
+  const DZ_W = 44;   // drop-zone width
+  const DZ_H = 40;   // drop-zone height
 
-  // ── Push constants to CSS so CSS vars always match JS ──────────────────────
+  // ── Sync CSS custom properties so CSS and JS always agree ──────────────────
   function _applyCSS(TW, TH) {
     const s = document.documentElement.style;
-    s.setProperty('--tile-w',   TW + 'px');
-    s.setProperty('--tile-h',   TH + 'px');
-    s.setProperty('--tile-gap', SPACING.GAP + 'px');
-    s.setProperty('--dz-w',     SPACING.DZ_W + 'px');
-    s.setProperty('--dz-h',     SPACING.DZ_H + 'px');
+    s.setProperty('--tile-w', TW + 'px');
+    s.setProperty('--tile-h', TH + 'px');
+    s.setProperty('--dz-w',   DZ_W + 'px');
+    s.setProperty('--dz-h',   DZ_H + 'px');
   }
 
   /**
-   * Returns a complete set of layout constants for a given board width.
-   * Also writes matching CSS custom properties as a side effect.
+   * Returns the complete set of layout constants for a given board width.
+   * Also writes matching CSS custom properties as a side-effect.
    *
-   * @param  {number} boardW  Available board width in px
-   * @returns {{ TW, TH, GAP, MX, SLOT, ROW_H, DZ_W, DZ_H }}
+   * @param  {number} boardW  Available board pixel width
+   * @returns {{ TW, TH, SLOT, ROW_H, MX, DZ_W, DZ_H }}
    */
   function forBoard(boardW) {
-    const { TW, TH } = getTileSize(boardW);
+    const { TW, TH } = _tileSize(boardW);
     _applyCSS(TW, TH);
-    const { GAP, MX, DZ_W, DZ_H } = SPACING;
-    // LANE_GAP = TH/2 means: corner tile bottom (cy + TH) exactly meets
-    // the next row's first tile top (new_cy - TH/2), i.e. ROW_H = 3*TH/2.
-    const LANE_GAP = Math.ceil(TH / 2);
     return {
       TW,
       TH,
-      GAP,
       MX,
       DZ_W,
       DZ_H,
-      LANE_GAP,
-      SLOT:  TW + GAP,       // path advance per tile slot
-      ROW_H: TH + LANE_GAP,  // vertical step between snake row centres (≈ 3*TH/2)
+      SLOT:  TW,        // one horizontal tile = one SLOT (no gap in geometry)
+      ROW_H: TW,        // = 2×TH — provides TH/2 visible gap between rows (see contract)
     };
   }
 
-  global.Tokens = { getTileSize, forBoard, SPACING };
+  global.Tokens = { forBoard };
 
 })(window);

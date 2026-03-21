@@ -1,58 +1,52 @@
 /**
- * boardLayout.js — Pure coordinate engine for the domino snake board.
+ * boardLayout.js — Domino snake board layout engine.
  *
- * RULES:
- *   • No DOM reads. No DOM writes. Pure math only.
- *   • All size constants come from Tokens.forBoard(boardW).
- *   • Returns absolute { x, y, w, h } for every tile and drop-zone.
+ * ALGORITHM: Cursor-walking (dynamic — handles doubles correctly)
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * The chain is built by walking a cursor (cx) along each row. Advance per tile:
+ *
+ *   Regular tile  →  cursor advances TW  (w=TW, h=TH)
+ *   Double tile   →  cursor advances TH  (w=TH, h=TW, flush to both neighbours)
+ *   Corner tile   →  triggered when distToEdge < TW; placed at board margin,
+ *                    starts the next row
+ *
+ * Unlike the old slot-grid approach there is no fixed `perRow`, so a row
+ * containing doubles can fit more tiles than an all-regular row, and doubles
+ * sit flush against their neighbours (no hoff gap).
+ *
+ * Each chain item carries `row` (0-based row index) and `rowDir` (+1/-1)
+ * metadata so the test verifier and app.js can use them directly.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * COORDINATE INVARIANT  (the foundational rule — never break this)
+ * GEOMETRY
  * ─────────────────────────────────────────────────────────────────────────────
- *   cx  =  cursor that tracks the current slot's "origin"
  *
- *   dir = +1 (going RIGHT):  cx = LEFT  edge of the slot
- *   dir = -1 (going LEFT):   cx = RIGHT edge of the slot
+ *   n      = max(2, floor((boardW − 2·MX − TH) / TW))   used only for EMX
+ *   EMX    = MX + floor(R / 2)   centres the chain horizontally
+ *   ROW_H  = TW  (= 2·TH)       provides TH/2 visible gap between rows
+ *   CY0    = TH + 4              first row centre-Y (corner fits above, y≥4)
  *
- *   Horizontal tile placement:
- *     dir=+1 →  x = cx          (tile starts at left edge)
- *     dir=-1 →  x = cx - TW     (tile ends at right edge)
+ *   Corner x:  dir=+1 → boardW − EMX − TH   (right margin)
+ *              dir=−1 → EMX                  (left margin)
+ *   Corner y:  round(cy − TH/2),  w = TH,  h = TW
  *
- *   Vertical tile placement (doubles & corner turns):
- *     hoff = floor((TW - TH) / 2)   ← centres the narrow tile in the wide slot
- *     dir=+1 →  x = cx + hoff
- *     dir=-1 →  x = cx - TH - hoff
+ *   WHY cy − TH/2 (not cy − TH):
+ *     With ROW_H = TW = 2·TH, the next row centre is at cy + 2·TH.
+ *     The corner tile spans [cy−TH/2 … cy+3·TH/2]:
+ *       • upper pip [cy−TH/2 … cy+TH/2] aligns with the last row's horizontal
+ *         tiles (they span [cy−TH/2 … cy+TH/2]) — face-to-face ✓
+ *       • lower pip [cy+TH/2 … cy+3·TH/2] bottom = cy+3·TH/2 = (cy+2·TH)−TH/2
+ *         = next row centre − TH/2 = top of first next-row tile ✓
+ *     Using cy−TH instead would leave a TH/2 gap at the bottom connection.
  *
- *   Row start cursor  (applied after every corner, and at the very beginning):
- *     dir=+1 →  cx = MX              ← LEFT  edge of first slot = left  margin
- *     dir=-1 →  cx = boardW - MX     ← RIGHT edge of first slot = right margin
- *
- *   Cursor advance after a non-corner tile:
- *     cx += dir * SLOT
- * ─────────────────────────────────────────────────────────────────────────────
+ *   Cursor after corner:
+ *     right corner → new dir=−1, cx = boardW − EMX
+ *     left  corner → new dir=+1, cx = EMX
  */
 (function (global) {
   'use strict';
 
-  /**
-   * Compute the full board layout.
-   *
-   * @param  {object}   board     - Server board state
-   *   board.tiles       [{tile:[a,b], flipped}]
-   *   board.spinnerIdx  number | null
-   *   board.topTiles    [{tile,flipped}]
-   *   board.bottomTiles [{tile,flipped}]
-   *   board.isEmpty     boolean
-   * @param  {number}   boardW    - Available board width in px (already measured)
-   * @param  {string[]} selSides  - Active drop-zone sides e.g. ['left','right']
-   *
-   * @returns {{
-   *   chain:   ChainItem[],   // main snake path items (tiles + left/right DZs)
-   *   spinner: SpinnerData | null,
-   *   totalW:  number,
-   *   totalH:  number,
-   * }}
-   */
   function compute(board, boardW, selSides) {
     selSides = selSides || [];
 
@@ -60,168 +54,183 @@
       return { chain: [], spinner: null, totalW: boardW, totalH: 100 };
     }
 
-    // ── Layout constants for this board width (also writes CSS vars) ──────────
+    // ── Constants ─────────────────────────────────────────────────────────────
     const C = Tokens.forBoard(boardW);
-    const { TW, TH, GAP, MX, SLOT, ROW_H, DZ_W, DZ_H } = C;
+    const { TW, TH, ROW_H, MX, DZ_W, DZ_H } = C;
 
-    // hoff: offset that centres a TH-wide double tile inside the TW-wide slot.
-    // Used only for doubles; corner tiles use margin-snapping instead.
-    const hoff = Math.floor((TW - TH) / 2);
-
-    // ── Effective margin (EMX) — centres the chain and snaps corners to edges ─
-    // A row consists of (perRow-1) horizontal tiles (SLOT each) + 1 corner (TH wide).
-    // We choose nHoriz so the row fits, then centre it, deriving EMX.
-    // With EMX, the cursor at the corner slot equals boardW - EMX - TH, meaning
-    // the corner's right face is exactly at boardW - EMX (same as row-2 first
-    // tile's right face) → pixel-perfect corner↔row alignment.
-    const nHoriz = Math.max(2, Math.floor((boardW - 2 * MX - TH) / SLOT));
-    const perRow = nHoriz + 1;
-    const rowUsed = nHoriz * SLOT + TH;
-    const EMX = Math.max(MX, Math.ceil((boardW - rowUsed) / 2));
-
-    // First row centre Y: must be ≥ TW/2 so vertical corner tiles don't clip the top
-    const CY0 = Math.ceil(TW / 2) + GAP;
-
-    const tiles      = board.tiles      || [];
+    const tiles      = board.tiles || [];
     const spinnerIdx = board.spinnerIdx != null ? board.spinnerIdx : null;
     const armsOpen   = spinnerIdx !== null
                     && spinnerIdx > 0
                     && spinnerIdx < tiles.length - 1;
+    const N = tiles.length;
 
-    // ── Phase 1: Build ordered item list ─────────────────────────────────────
-    // Optional left DZ → all chain tiles → optional right DZ
-    const items = [];
-    if (selSides.includes('left'))  items.push({ kind: 'dz', side: 'left'  });
-    tiles.forEach((t, i) => items.push({ kind: 'tile', ...t, chainIdx: i }));
-    if (selSides.includes('right')) items.push({ kind: 'dz', side: 'right' });
+    if (N === 0) return { chain: [], spinner: null, totalW: boardW, totalH: 100 };
 
-    // ── Phase 2: Walk the snake path ──────────────────────────────────────────
-    const N     = items.length;
-    let cx      = EMX;  // cursor — see COORDINATE INVARIANT above (use EMX not MX)
-    let cy      = CY0;  // row vertical centre
-    let dir     = 1;    // +1 = right, -1 = left
+    // ── Layout constants ───────────────────────────────────────────────────────
+    // `n` is used only to compute EMX (chain centring). It is NOT a fixed perRow.
+    const n   = Math.max(2, Math.floor((boardW - 2 * MX - TH) / TW));
+    const R   = (boardW - 2 * MX - TH) - n * TW;
+    const EMX = Math.max(MX, MX + Math.floor(R / 2));
+
+    const CY0         = TH + 4;
+    const cornerRight = boardW - EMX - TH;   // left edge of right-side corner
+    const cornerLeft  = EMX;                 // left edge of left-side corner
+
+    // ── Cursor-walking chain builder ───────────────────────────────────────────
     const chain = [];
 
-    for (let i = 0; i < N; i++) {
-      const item       = items[i];
-      const posInRow   = i % perRow;
-      const isLastSlot = posInRow === perRow - 1;
-      const isFinalRow = i + perRow >= N;
-      // A corner is the last slot in any non-final row → tile placed vertically
-      const isCorner   = isLastSlot && !isFinalRow;
+    // cx: for dir=+1, left edge of next tile slot
+    //     for dir=−1, right edge of next tile slot
+    let cx  = EMX;
+    let cy  = CY0;
+    let dir = 1;     // +1 = L→R, −1 = R→L
+    let row = 0;
 
-      if (item.kind === 'dz') {
-        // Drop-zone: same slot origin, DZ dimensions
-        const x = dir === 1 ? cx : cx - DZ_W;  // DZ follows cursor like a horizontal tile
-        const y = Math.round(cy - DZ_H / 2);
-        chain.push({ isDZ: true, side: item.side, x, y, w: DZ_W, h: DZ_H });
+    for (let i = 0; i < N; i++) {
+      const t         = tiles[i];
+      const [a, b]    = t.tile;
+      const isDouble  = a === b;
+      const isSpinner = i === spinnerIdx;
+
+      // Capture current direction BEFORE any corner flip
+      const tileDir = dir;
+
+      // Remaining space before the margin corner position:
+      //   dir=+1: pixels from cursor to right corner x
+      //   dir=−1: pixels from cursor right-edge to left corner right-edge (EMX+TH)
+      const distToEdge = tileDir === 1
+        ? cornerRight - cx
+        : cx - TH - cornerLeft;
+
+      // Corner: not enough room for a regular tile, and not the last tile
+      const isCorner = (i < N - 1) && (distToEdge < TW);
+
+      let x, y, w, h;
+
+      if (isCorner) {
+        // ── Corner tile ───────────────────────────────────────────────────────
+        // y = cy − TH/2 so the lower pip aligns with the next row's first tile.
+        // See algorithm header for the full derivation.
+        x = tileDir === 1 ? cornerRight : cornerLeft;
+        y = Math.round(cy - TH / 2);
+        w = TH;
+        h = TW;
+        // Advance to next row AFTER positioning this tile
+        cy  += ROW_H;
+        dir  = -tileDir;
+        row += 1;
+        cx   = dir === 1 ? EMX : boardW - EMX;
+
+      } else if (isDouble) {
+        // ── Double tile: flush against neighbours, no hoff offset ─────────────
+        if (tileDir === 1) {
+          x  = cx;
+          cx += TH;          // double is TH wide → advance only TH
+        } else {
+          cx -= TH;
+          x   = cx;
+        }
+        y = Math.round(cy - TH);   // centred on row cy, sticks TH above + below
+        w = TH;
+        h = TW;
 
       } else {
-        const { tile, flipped, chainIdx } = item;
-        const [a, b] = tile;
-        const isDouble  = a === b;
-        const isSpinner = chainIdx === spinnerIdx;
-
-        // Doubles and corner-turn tiles are placed vertically (perpendicular)
-        const isVert = isDouble || isCorner;
-
-        // Flip semantics: invert when going left so the connecting pip always
-        // faces the chain interior (visually correct for the player)
-        const eFlip = dir === -1 ? !flipped : flipped;
-        const showA = eFlip ? b : a;
-        const showB = eFlip ? a : b;
-
-        let x, y, w, h;
-        if (isVert) {
-          if (isCorner) {
-            // Corner tile: snap to the board margin so its outer face aligns
-            // with the first tile of the next row (both share the same margin edge).
-            // dir=+1 row ends on the RIGHT → corner right face = boardW - EMX
-            // dir=-1 row ends on the LEFT  → corner left  face = EMX
-            x = dir === 1 ? boardW - EMX - TH : EMX;
-          } else {
-            // Double tile in mid-chain: centre it within its TW-wide slot
-            x = dir === 1 ? cx + hoff : cx - TH - hoff;
-          }
-          y = Math.round(cy - TW / 2);
-          w = TH;
-          h = TW;
+        // ── Regular horizontal tile ───────────────────────────────────────────
+        if (tileDir === 1) {
+          x  = cx;
+          cx += TW;
         } else {
-          // Horizontal: TW wide × TH tall
-          x = dir === 1 ? cx : cx - TW;
-          y = Math.round(cy - TH / 2);
-          w = TW;
-          h = TH;
+          cx -= TW;
+          x   = cx;
         }
-
-        chain.push({
-          isDZ: false, x, y, w, h,
-          showA, showB,
-          isVertical: isVert,
-          isCorner,
-          isDouble,
-          isSpinner,
-          chainIdx,
-        });
+        y = Math.round(cy - TH / 2);
+        w = TW;
+        h = TH;
       }
 
-      // ── Advance cursor ──────────────────────────────────────────────────────
-      if (isCorner) {
-        // ═══════════════════════════════════════════════════════════════════════
-        // CURSOR RESET  — the most important line in this file.
-        //
-        // After a corner the direction flips. The new cx must satisfy the
-        // COORDINATE INVARIANT for the NEW direction:
-        //
-        //   dir=+1 after flip  →  cx = MX            (left edge of first slot)
-        //   dir=-1 after flip  →  cx = boardW - MX   (right edge of first slot)
-        //
-        // Common mistake: using boardW - MX - TW for dir=-1.
-        // That places the tile at x = cx - TW = boardW - MX - 2*TW,
-        // which is one full tile-width too far left, causing cascade overflow.
-        // ═══════════════════════════════════════════════════════════════════════
-        cy  += ROW_H;
-        dir *= -1;
-        cx   = dir === 1 ? EMX : boardW - EMX;  // ← INVARIANT-CORRECT reset (use EMX)
+      // Flip semantics: invert when going left so the connecting pip faces
+      // the chain interior.
+      const eFlip = tileDir === -1 ? !t.flipped : t.flipped;
+      const showA = eFlip ? b : a;
+      const showB = eFlip ? a : b;
 
-      } else {
-        cx += dir * SLOT;
+      chain.push({
+        isDZ:       false,
+        x, y, w, h,
+        showA, showB,
+        isVertical: isDouble || isCorner,
+        isCorner,
+        isDouble,
+        isSpinner,
+        chainIdx:   i,
+        row:        isCorner ? row - 1 : row,  // corner belongs to the row it ends
+        rowDir:     tileDir,
+      });
+    }
+
+    // ── Drop-zones: placed adjacent to chain endpoints ────────────────────────
+    if (selSides.length > 0) {
+      const firstTile = chain[0];
+      const lastTile  = chain[chain.length - 1];
+
+      if (selSides.includes('left') && firstTile) {
+        // Tile 0 is always dir=+1; open face is on the left at x = EMX
+        const dzX = Math.max(0, firstTile.x - DZ_W);
+        const dzY = Math.round(firstTile.y + firstTile.h / 2 - DZ_H / 2);
+        chain.unshift({ isDZ: true, side: 'left', x: dzX, y: dzY, w: DZ_W, h: DZ_H });
+      }
+
+      if (selSides.includes('right') && lastTile) {
+        // Open face: right side for rowDir=+1, left side for rowDir=−1
+        const dzX = lastTile.rowDir === 1
+          ? lastTile.x + lastTile.w
+          : Math.max(0, lastTile.x - DZ_W);
+        const dzY = Math.round(lastTile.y + lastTile.h / 2 - DZ_H / 2);
+        chain.push({ isDZ: true, side: 'right', x: dzX, y: dzY, w: DZ_W, h: DZ_H });
       }
     }
 
-    // ── Phase 3: Spinner arms ─────────────────────────────────────────────────
+    // ── Spinner arms ──────────────────────────────────────────────────────────
     let spinner = null;
 
     if (spinnerIdx !== null) {
       const sp = chain.find(c => !c.isDZ && c.isSpinner);
 
       if (sp) {
-        const scx = sp.x + sp.w / 2;            // horizontal centre of spinner tile
-        const armX = Math.round(scx - TW / 2);  // arm tiles are horizontal (TW wide)
+        const scx  = sp.x + sp.w / 2;
+        const armX = Math.round(scx - TW / 2);
 
-        // Top arm — server stores topTiles[0]=outermost, we render nearest-first
-        const topTiles    = board.topTiles    || [];
-        const topRev      = [...topTiles].reverse();
-
-        const topLayouts  = topRev.map(({ tile, flipped }, idx) => {
+        // Top arm — topTiles[0] is outermost; render nearest-first (reversed).
+        const topTiles   = board.topTiles || [];
+        const topRev     = [...topTiles].reverse();
+        const topLayouts = topRev.map(({ tile, flipped }, idx) => {
           const [ta, tb] = tile;
-          const showA = flipped ? tb : ta;
-          const showB = flipped ? ta : tb;
-          const y = sp.y - (topRev.length - idx) * (TH + GAP);
-          return { x: armX, y, w: TW, h: TH, showA, showB, isVertical: false };
+          return {
+            x: armX,
+            y: sp.y - (topRev.length - idx) * (TH + 2),
+            w: TW, h: TH,
+            showA: flipped ? tb : ta,
+            showB: flipped ? ta : tb,
+            isVertical: false,
+          };
         });
 
-        // Bottom arm — bottomTiles[0] is closest to spinner
+        // Bottom arm — bottomTiles[0] is closest to spinner.
         const bottomTiles   = board.bottomTiles || [];
         const bottomLayouts = bottomTiles.map(({ tile, flipped }, idx) => {
           const [ta, tb] = tile;
-          const showA = flipped ? tb : ta;
-          const showB = flipped ? ta : tb;
-          const y = sp.y + sp.h + GAP + idx * (TH + GAP);
-          return { x: armX, y, w: TW, h: TH, showA, showB, isVertical: false };
+          return {
+            x: armX,
+            y: sp.y + sp.h + 2 + idx * (TH + 2),
+            w: TW, h: TH,
+            showA: flipped ? tb : ta,
+            showB: flipped ? ta : tb,
+            isVertical: false,
+          };
         });
 
-        // Drop-zones for arms (only when arms are unlocked)
+        // Arm drop-zones (only when arms are unlocked).
         let topDZ = null, botDZ = null;
 
         if (armsOpen && selSides.includes('top')) {
@@ -229,7 +238,7 @@
           topDZ = {
             isDZ: true, side: 'top',
             x: Math.round(scx - DZ_W / 2),
-            y: refY - DZ_H - GAP,
+            y: refY - DZ_H - 2,
             w: DZ_W, h: DZ_H,
           };
         }
@@ -240,7 +249,7 @@
           botDZ = {
             isDZ: true, side: 'bottom',
             x: Math.round(scx - DZ_W / 2),
-            y: refY + GAP,
+            y: refY + 2,
             w: DZ_W, h: DZ_H,
           };
         }
@@ -249,7 +258,7 @@
       }
     }
 
-    // ── Phase 4: Bounding box — shift if anything clips left or top ───────────
+    // ── Bounding box + overflow guard ─────────────────────────────────────────
     const all = [
       ...chain,
       ...(spinner?.topLayouts    || []),
@@ -265,8 +274,9 @@
     const maxX = Math.max(...all.map(t => t.x + t.w));
     const maxY = Math.max(...all.map(t => t.y + t.h));
 
-    const ox = minX < EMX ? EMX - minX : 0;
-    const oy = minY < 4   ? 4   - minY : 0;
+    // Shift everything right/down if content clips the left or top edge.
+    const ox = minX < 4 ? 4 - minX : 0;
+    const oy = minY < 4 ? 4 - minY : 0;
 
     if (ox > 0 || oy > 0) {
       const shift = it => it ? { ...it, x: it.x + ox, y: it.y + oy } : it;
@@ -283,7 +293,7 @@
     return {
       chain,
       spinner,
-      totalW: Math.max(boardW, maxX + ox + EMX),
+      totalW: Math.max(boardW, maxX + ox + MX),
       totalH: maxY + oy + 8,
     };
   }
